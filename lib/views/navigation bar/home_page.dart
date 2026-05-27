@@ -2,11 +2,14 @@
 // lib/views/home_page.dart
 // ============================================================
 
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:club_india_user/models/user_model.dart';
 import 'package:club_india_user/services/api_service.dart';
+import 'package:club_india_user/views/navigation%20bar/redeem_point_screen.dart';
 import 'package:club_india_user/views/navigation_bar_page.dart';
 import 'package:flutter/material.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -23,17 +26,31 @@ class _HomePageState extends State<HomePage> {
   String _userName = '';
   String _phone = '';
   String _city = '';
-  double _walletBalance =
-      0; // ✅ FIX: was int _points, backend sends wallet_balance as double
-  String _qrData = '';
+  double _walletBalance = 0;
 
-  List<OfferModel> _offers = []; // ✅ typed list
-  List<PartnerStoreModel> _partners = []; // ✅ typed list
+  // 🔥 backend base64 PNG bytes — QrImageView ഇല്ല, Image.memory() use ചെയ്യുന്നു
+  Uint8List? _qrBytes;
+
+  List<OfferModel> _offers = [];
+  List<PartnerStoreModel> _partners = [];
 
   @override
   void initState() {
     super.initState();
     _fetchHome();
+  }
+
+  // ── Decode base64 QR from backend ───────────────────────────
+  // backend: "data:image/png;base64,iVBOR..." → Uint8List
+  Uint8List? _decodeQr(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final base64Str = raw.contains(',') ? raw.split(',').last : raw;
+      return base64Decode(base64Str);
+    } catch (e) {
+      debugPrint('❌ [QR Decode] Failed: $e');
+      return null;
+    }
   }
 
   Future<void> _fetchHome() async {
@@ -43,27 +60,17 @@ class _HomePageState extends State<HomePage> {
     });
 
     try {
-      // ✅ UserApiService.getHome() — returns HomeResponseModel
       final HomeResponseModel data = await UserApiService.getHome();
 
-      // ── Parse user ──────────────────────────────────────────
       _userName = data.user.name ?? 'User';
       _phone = data.user.phone;
       _city = data.user.city ?? '';
-
-      // ✅ FIX: backend field is wallet_balance (double), not points/balance
       _walletBalance = data.user.walletBalance;
 
-      // QR: backend stores full base64 QR in qr_code field
-      // Use it directly if present, else fallback to phone-based string
-      _qrData = data.user.qrCode?.isNotEmpty == true
-          ? data.user.qrCode! // base64 data URL from backend
-          : 'CLUBINDIA-$_phone'; // fallback
+      // 🔥 backend base64 PNG decode ചെയ്യുന്നു
+      _qrBytes = _decodeQr(data.user.qrCode);
 
-      // ── Offers (max 3 on home) ──────────────────────────────
       _offers = data.offers.take(3).toList();
-
-      // ── Nearby stores (max 5) ───────────────────────────────
       _partners = data.nearbyStores.take(5).toList();
 
       setState(() => _loading = false);
@@ -131,30 +138,43 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildError() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.wifi_off_rounded,
-            size: 48,
-            color: Color(0xFFFF2D78),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            _error!,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Color(0xFF888888)),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: _fetchHome,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF2D78),
+    return RefreshIndicator(
+      color: const Color(0xFFFF2D78),
+      onRefresh: _fetchHome,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.6,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.wifi_off_rounded,
+                  size: 48,
+                  color: Color(0xFFFF2D78),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  _error!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Color(0xFF888888)),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: _fetchHome,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF2D78),
+                  ),
+                  child: const Text(
+                    'Retry',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
             ),
-            child: const Text('Retry', style: TextStyle(color: Colors.white)),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -230,13 +250,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   // ── QR Card ─────────────────────────────────────────────────
-  // Backend qr_code is a base64 data URL — we render the phone-based string
-  // for QrImageView since it needs raw text, not an image URL.
   Widget _buildQRCard(BuildContext context) {
-    // QrImageView needs a plain string (not base64 image).
-    // Use phone as QR content; backend QR image can be shown via Image.memory if needed.
-    final qrContent = 'CLUBINDIA-$_phone';
-
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 28),
@@ -263,31 +277,17 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
             ),
-            child: LayoutBuilder(
-              builder: (context, _) {
-                final qrSize = (MediaQuery.of(context).size.width * 0.55).clamp(
-                  140.0,
-                  220.0,
-                );
-                return QrImageView(
-                  data: qrContent,
-                  version: QrVersions.auto,
-                  size: qrSize,
-                  eyeStyle: const QrEyeStyle(
-                    eyeShape: QrEyeShape.square,
-                    color: Color(0xFFF48FB1),
-                  ),
-                  dataModuleStyle: const QrDataModuleStyle(
-                    dataModuleShape: QrDataModuleShape.square,
-                    color: Color(0xFFF48FB1),
-                  ),
-                );
-              },
+            // 🔥 Image.memory() — backend base64 PNG directly render ചെയ്യുന്നു
+            child: _buildQrImage(
+              size: (MediaQuery.of(context).size.width * 0.55).clamp(
+                140.0,
+                220.0,
+              ),
             ),
           ),
           const SizedBox(height: 16),
           GestureDetector(
-            onTap: () => _showFullScreenQR(context, qrContent),
+            onTap: () => _showFullScreenQR(context),
             child: const Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -313,7 +313,43 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _showFullScreenQR(BuildContext context, String qrContent) {
+  // 🔥 Core QR render widget — bytes ഉണ്ടെങ്കിൽ Image.memory(), ഇല്ലെങ്കിൽ error UI
+  Widget _buildQrImage({required double size}) {
+    if (_qrBytes != null) {
+      return Image.memory(
+        _qrBytes!,
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => _buildQrError(size),
+      );
+    }
+    return _buildQrError(size);
+  }
+
+  Widget _buildQrError(double size) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.qr_code_2_rounded,
+            size: size * 0.45,
+            color: Colors.grey[300],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'QR not available',
+            style: TextStyle(fontSize: 12, color: Colors.grey[400]),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showFullScreenQR(BuildContext context) {
     showDialog(
       context: context,
       builder: (_) => Dialog(
@@ -324,7 +360,6 @@ class _HomePageState extends State<HomePage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // ── Username at top ──────────────────────────────
               Text(
                 _userName,
                 style: const TextStyle(
@@ -340,26 +375,14 @@ class _HomePageState extends State<HomePage> {
                 style: const TextStyle(fontSize: 13, color: Color(0xFF8E8E93)),
               ),
               const SizedBox(height: 20),
-              // ── QR Code ──────────────────────────────────────
+              // 🔥 Full screen dialog-ലും same Image.memory()
               Builder(
                 builder: (ctx) {
                   final size = (MediaQuery.of(ctx).size.width * 0.65).clamp(
                     160.0,
                     280.0,
                   );
-                  return QrImageView(
-                    data: qrContent,
-                    version: QrVersions.auto,
-                    size: size,
-                    eyeStyle: const QrEyeStyle(
-                      eyeShape: QrEyeShape.square,
-                      color: Color(0xFFF48FB1),
-                    ),
-                    dataModuleStyle: const QrDataModuleStyle(
-                      dataModuleShape: QrDataModuleShape.square,
-                      color: Color(0xFFF48FB1),
-                    ),
-                  );
+                  return _buildQrImage(size: size);
                 },
               ),
               const SizedBox(height: 16),
@@ -379,7 +402,6 @@ class _HomePageState extends State<HomePage> {
 
   // ── Points / Wallet Card ─────────────────────────────────────
   Widget _buildPointsCard() {
-    // ✅ FIX: show wallet_balance (double), formatted with commas
     final formatted = _walletBalance
         .toStringAsFixed(0)
         .replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},');
@@ -403,7 +425,7 @@ class _HomePageState extends State<HomePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Wallet Balance', // ✅ updated label to match backend
+                  'Wallet Balance',
                   style: TextStyle(fontSize: 14, color: Color(0xFF4A4A68)),
                 ),
                 const SizedBox(height: 4),
@@ -449,7 +471,13 @@ class _HomePageState extends State<HomePage> {
             ),
             child: ElevatedButton(
               onPressed: () {
-                // TODO: navigate to withdraw/redeem page
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        RedeemPointsPage(walletBalance: _walletBalance),
+                  ),
+                );
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.transparent,
@@ -536,7 +564,7 @@ class _HomePageState extends State<HomePage> {
         itemCount: _offers.length,
         separatorBuilder: (_, __) => const SizedBox(width: 12),
         itemBuilder: (_, i) {
-          final OfferModel o = _offers[i]; // ✅ typed — no more Map casting
+          final OfferModel o = _offers[i];
           return Container(
             width: 160,
             padding: const EdgeInsets.all(16),
@@ -554,7 +582,7 @@ class _HomePageState extends State<HomePage> {
                 ),
                 const Spacer(),
                 Text(
-                  o.title, // ✅ direct field access
+                  o.title,
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
@@ -565,7 +593,7 @@ class _HomePageState extends State<HomePage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  o.description ?? '', // ✅ direct field access
+                  o.description ?? '',
                   style: const TextStyle(
                     fontSize: 12,
                     color: Color(0xFF4A4A68),
@@ -621,7 +649,6 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildPartnerTile(PartnerStoreModel p) {
-    // ✅ typed parameter
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
       decoration: BoxDecoration(
@@ -644,7 +671,7 @@ class _HomePageState extends State<HomePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  p.storeName, // ✅ direct field
+                  p.storeName,
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 15,
@@ -654,7 +681,7 @@ class _HomePageState extends State<HomePage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  p.address ?? p.city, // ✅ address or city fallback
+                  p.address ?? p.city,
                   style: const TextStyle(
                     fontSize: 13,
                     color: Color(0xFF8E8E93),

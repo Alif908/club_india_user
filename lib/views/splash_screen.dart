@@ -1,4 +1,6 @@
+import 'package:club_india_user/services/api_service.dart';
 import 'package:club_india_user/views/login_page.dart';
+import 'package:club_india_user/views/navigation_bar_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -20,7 +22,6 @@ class _SplashScreenState extends State<SplashScreen>
   void initState() {
     super.initState();
 
-    // Hide status bar for full immersive splash
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
     _controller = AnimationController(
@@ -28,7 +29,6 @@ class _SplashScreenState extends State<SplashScreen>
       duration: const Duration(milliseconds: 1800),
     );
 
-    // Logo fade in
     _fadeAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
@@ -36,7 +36,6 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
 
-    // Logo scale
     _scaleAnim = Tween<double>(begin: 0.78, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
@@ -44,7 +43,6 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
 
-    // Subtitle fades in slightly after logo
     _subtitleFadeAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
@@ -54,17 +52,48 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller.forward();
 
-    // Navigate to onboarding after 3 seconds
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-        // Replace with your navigation logic:
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => LoginPage()),
-        );
-      }
-    });
+    // ✅ Token check cheyth navigate cheyyunnu
+    _navigateAfterSplash();
+  }
+
+  Future<void> _navigateAfterSplash() async {
+    // Splash minimum 3 seconds kaanikkuva + token check parallel aayi nadakkum
+    final results = await Future.wait([
+      Future.delayed(const Duration(seconds: 3)),
+      UserApiService.isLoggedIn(),
+    ]);
+
+    if (!mounted) return;
+
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
+    final bool isLoggedIn = results[1] as bool;
+
+    if (isLoggedIn) {
+      // ✅ Token undo — direct home page
+      // phoneNumber empty string kodukkunnu (token already saved aanu)
+      Navigator.pushReplacement(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (_, animation, __) =>
+              const MainNavScreen(phoneNumber: ''),
+          transitionsBuilder: (_, animation, __, child) => FadeTransition(
+            opacity: CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeInOut,
+            ),
+            child: child,
+          ),
+          transitionDuration: const Duration(milliseconds: 500),
+        ),
+      );
+    } else {
+      // ✅ Token illa — login page
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginPage()),
+      );
+    }
   }
 
   @override
@@ -84,11 +113,7 @@ class _SplashScreenState extends State<SplashScreen>
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFFFF0F3), // very light pink top-left
-              Color(0xFFFFD6E0), // soft pink center
-              Color(0xFFFFB6C8), // deeper pink bottom-right
-            ],
+            colors: [Color(0xFFFFF0F3), Color(0xFFFFD6E0), Color(0xFFFFB6C8)],
             stops: [0.0, 0.5, 1.0],
           ),
         ),
@@ -96,7 +121,6 @@ class _SplashScreenState extends State<SplashScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Animated Logo Text
               AnimatedBuilder(
                 animation: _controller,
                 builder: (context, child) {
@@ -107,10 +131,7 @@ class _SplashScreenState extends State<SplashScreen>
                 },
                 child: const _ClubIndiaLogo(),
               ),
-
               const SizedBox(height: 18),
-
-              // Animated Subtitle
               AnimatedBuilder(
                 animation: _subtitleFadeAnim,
                 builder: (context, child) {
@@ -137,8 +158,6 @@ class _SplashScreenState extends State<SplashScreen>
   }
 }
 
-/// Renders "ClubIndia" with the gradient shimmer effect:
-/// "Club" = vivid pink, "India" = faded/light pink (as seen in the design)
 class _ClubIndiaLogo extends StatelessWidget {
   const _ClubIndiaLogo();
 
@@ -149,11 +168,7 @@ class _ClubIndiaLogo extends StatelessWidget {
         return const LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
-          colors: [
-            Color(0xFFFF2D78), // vivid pink — "Club"
-            Color(0xFFFF6BA8), // mid pink
-            Color(0xFFFFB3CB), // light faded pink — "India"
-          ],
+          colors: [Color(0xFFFF2D78), Color(0xFFFF6BA8), Color(0xFFFFB3CB)],
           stops: [0.0, 0.45, 1.0],
         ).createShader(bounds);
       },
@@ -162,7 +177,7 @@ class _ClubIndiaLogo extends StatelessWidget {
         style: TextStyle(
           fontSize: 48,
           fontWeight: FontWeight.bold,
-          color: Colors.white, // overridden by shader
+          color: Colors.white,
           letterSpacing: 0.5,
         ),
       ),

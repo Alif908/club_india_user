@@ -27,7 +27,7 @@ class _MainNavScreenState extends State<MainNavScreen> {
     super.initState();
     _selectedScreen = widget.initialTabIndex;
     _pages = [
-      const HomePage(),
+       HomePage(),
       SpecialOffersPage(onBack: () => setState(() => _selectedScreen = 0)),
        HistoryPage(onBack: () => setState(() => _selectedScreen = 0)),
       ProfilePage(onBack: () => setState(() => _selectedScreen = 0)),

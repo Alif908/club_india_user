@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:developer' as dev;
+import 'package:flutter/foundation.dart';
 import 'package:club_india_user/models/user_model.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 // ─────────────────────────────────────────────────────────────
 
 const String _baseUrl = 'https://coinapi.bestagencyindia.com/api';
+// const String _baseUrl = 'http://192.168.1.3:3030/api';
 const String _tokenKey = 'user_token';
 
 // ─────────────────────────────────────────────────────────────
@@ -33,25 +34,59 @@ class UserApiService {
   // ── Token helpers ──────────────────────────────────────────
 
   static Future<void> _saveToken(String token) async {
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    debugPrint('💾 [Auth] _saveToken() called');
+    debugPrint('   Key         : $_tokenKey');
+    debugPrint('   Token length: ${token.length}');
+    debugPrint('   Token full   : $token');
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tokenKey, token);
-    dev.log('💾 [Auth] Token saved', name: 'UserApiService');
+    final success = await prefs.setString(_tokenKey, token);
+    debugPrint('   Saved       : $success');
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   }
 
   static Future<String?> _getToken() async {
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    debugPrint('🔑 [Auth] _getToken() called');
+    debugPrint('   Key: $_tokenKey');
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_tokenKey);
+
+    // All keys currently in SharedPreferences
+    final allKeys = prefs.getKeys();
+    debugPrint('   All SharedPrefs keys: $allKeys');
+
+    final token = prefs.getString(_tokenKey);
+    if (token == null) {
+      debugPrint('   Result: NULL — key "$_tokenKey" not found in SharedPrefs');
+    } else if (token.isEmpty) {
+      debugPrint('   Result: EMPTY STRING — token exists but is empty');
+    } else {
+      debugPrint('   Result: EXISTS');
+      debugPrint('   Token length : ${token.length}');
+      debugPrint('   Token full  : $token');
+    }
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    return token;
   }
 
   static Future<void> logout() async {
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    debugPrint('🚪 [Auth] logout() called');
+    debugPrint('   Removing key: $_tokenKey');
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_tokenKey);
-    dev.log('🚪 [Auth] Logged out — token cleared', name: 'UserApiService');
+    final removed = await prefs.remove(_tokenKey);
+    debugPrint('   Removed: $removed');
+    final remaining = prefs.getKeys();
+    debugPrint('   Remaining keys: $remaining');
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   }
 
   static Future<bool> isLoggedIn() async {
+    debugPrint('🔐 [Auth] isLoggedIn() called');
     final token = await _getToken();
-    return token != null && token.isNotEmpty;
+    final loggedIn = token != null && token.isNotEmpty;
+    debugPrint('   isLoggedIn result: $loggedIn');
+    return loggedIn;
   }
 
   // ── Request helper ─────────────────────────────────────────
@@ -65,21 +100,28 @@ class UserApiService {
     final uri = Uri.parse('$_baseUrl$endpoint');
     final headers = <String, String>{'Content-Type': 'application/json'};
 
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    debugPrint('📤 [$method] $endpoint');
+    debugPrint('   URI: $uri');
+
     if (requiresAuth) {
       final token = await _getToken();
-      if (token == null) {
+      if (token == null || token.isEmpty) {
+        debugPrint('❌ [Auth] No token found — aborting request');
         throw ApiException(
           statusCode: 401,
           message: 'No token found. Please login again.',
         );
       }
       headers['Authorization'] = 'Bearer $token';
+      debugPrint('   Auth: Bearer token attached');
     }
 
-    dev.log(
-      '\n📤 [$method] $endpoint\n   Body: ${body != null ? jsonEncode(body) : "none"}',
-      name: 'UserApiService',
-    );
+    if (body != null) {
+      debugPrint('   Body: ${jsonEncode(body)}');
+    } else {
+      debugPrint('   Body: none');
+    }
 
     http.Response response;
 
@@ -101,17 +143,17 @@ class UserApiService {
               .timeout(const Duration(seconds: 15));
       }
     } catch (e) {
-      dev.log('🔴 [Network Error] $endpoint → $e', name: 'UserApiService');
+      debugPrint('🔴 [Network Error] $endpoint → $e');
       throw ApiException(
         statusCode: 0,
         message: 'Network error. Check your connection.',
       );
     }
 
-    dev.log(
-      '\n📥 [$method] $endpoint\n   Status: ${response.statusCode}\n   Body: ${response.body}',
-      name: 'UserApiService',
-    );
+    debugPrint('📥 [$method] $endpoint');
+    debugPrint('   Status: ${response.statusCode}');
+    debugPrint('   Response Body: ${response.body}');
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     final decoded = jsonDecode(response.body);
 
@@ -119,6 +161,7 @@ class UserApiService {
       final msg = decoded is Map
           ? decoded['message'] ?? 'Something went wrong'
           : 'Something went wrong';
+      debugPrint('❌ [API Error] [$method] $endpoint → $msg');
       throw ApiException(statusCode: response.statusCode, message: msg);
     }
 
@@ -130,9 +173,8 @@ class UserApiService {
   // ────────────────────────────────────────────────────────────
 
   /// POST /api/user/send-otp
-  /// Returns full Map so login page can read res['otp'] during dev
   static Future<Map<String, dynamic>> sendOtp(String phone) async {
-    dev.log('🔑 [sendOtp] phone: $phone', name: 'UserApiService');
+    debugPrint('🔑 [sendOtp] Sending OTP to phone: $phone');
 
     final data = await _request(
       method: 'POST',
@@ -140,12 +182,9 @@ class UserApiService {
       body: {'phone': phone},
     );
 
-    dev.log(
-      '✅ [sendOtp] Success. OTP (dev only): ${data['otp']}',
-      name: 'UserApiService',
-    );
+    debugPrint('✅ [sendOtp] OTP sent successfully');
+    debugPrint('   OTP (dev only): ${data['otp']}');
 
-    // Returns: { message: "OTP sent successfully", otp: "123456" }
     return Map<String, dynamic>.from(data);
   }
 
@@ -161,32 +200,36 @@ class UserApiService {
     double? latitude,
     double? longitude,
   }) async {
-    dev.log('✅ [verifyOtp] phone: $phone', name: 'UserApiService');
+    debugPrint('✅ [verifyOtp] Verifying OTP for phone: $phone');
+
+    final bodyPayload = <String, dynamic>{
+      'phone': phone,
+      'otp': otp,
+      if (name != null) 'name': name,
+      if (email != null) 'email': email,
+      if (state != null) 'state': state,
+      if (district != null) 'district': district,
+      if (city != null) 'city': city,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+    };
+
+    debugPrint('   Payload keys: ${bodyPayload.keys.toList()}');
 
     final data = await _request(
       method: 'POST',
       endpoint: '/user/verify-otp',
-      body: {
-        'phone': phone,
-        'otp': otp,
-        if (name != null) 'name': name,
-        if (email != null) 'email': email,
-        if (state != null) 'state': state,
-        if (district != null) 'district': district,
-        if (city != null) 'city': city,
-        if (latitude != null) 'latitude': latitude,
-        if (longitude != null) 'longitude': longitude,
-      },
+      body: bodyPayload,
     );
 
     final token = data['token'] as String;
     await _saveToken(token);
 
-    final user = UserModel.fromJson(data['user']);
-    dev.log(
-      '🎟️ [verifyOtp] Login success. User id: ${user.id}',
-      name: 'UserApiService',
-    );
+    final user = UserModel.fromJson(data['user'] as Map<String, dynamic>);
+    debugPrint('🎟️ [verifyOtp] Login successful');
+    debugPrint('   User ID: ${user.id}');
+    debugPrint('   User Phone: ${user.phone}');
+    debugPrint('   Wallet Balance: ${user.walletBalance}');
 
     return (token: token, user: user);
   }
@@ -197,7 +240,7 @@ class UserApiService {
 
   /// GET /api/user/home
   static Future<HomeResponseModel> getHome() async {
-    dev.log('🏠 [getHome] Fetching home data...', name: 'UserApiService');
+    debugPrint('🏠 [getHome] Fetching home data...');
 
     final data = await _request(
       method: 'GET',
@@ -205,11 +248,11 @@ class UserApiService {
       requiresAuth: true,
     );
 
-    final result = HomeResponseModel.fromJson(data);
-    dev.log(
-      '✅ [getHome] stores: ${result.nearbyStores.length}, offers: ${result.offers.length}',
-      name: 'UserApiService',
-    );
+    final result = HomeResponseModel.fromJson(data as Map<String, dynamic>);
+    debugPrint('✅ [getHome] Home data loaded');
+    debugPrint('   Nearby Stores: ${result.nearbyStores.length}');
+    debugPrint('   Offers: ${result.offers.length}');
+    debugPrint('   User Wallet Balance: ${result.user.walletBalance}');
 
     return result;
   }
@@ -219,8 +262,11 @@ class UserApiService {
   // ────────────────────────────────────────────────────────────
 
   /// GET /api/user/profile
+  ///
+  /// FIX: Backend returns { "user": {...} } wrapper — extracting data['user']
+  /// instead of casting the entire response directly as UserModel.
   static Future<UserModel> getProfile() async {
-    dev.log('👤 [getProfile] Fetching profile...', name: 'UserApiService');
+    debugPrint('👤 [getProfile] Fetching user profile...');
 
     final data = await _request(
       method: 'GET',
@@ -228,8 +274,23 @@ class UserApiService {
       requiresAuth: true,
     );
 
-    final user = UserModel.fromJson(data);
-    dev.log('✅ [getProfile] User id: ${user.id}', name: 'UserApiService');
+    // 🔥 FIX: Backend wraps response in { "user": {...} }
+    // Safe fallback: if 'user' key missing, try parsing data directly
+    final Map<String, dynamic> userJson =
+        (data is Map<String, dynamic> && data.containsKey('user'))
+        ? data['user'] as Map<String, dynamic>
+        : data as Map<String, dynamic>;
+
+    final user = UserModel.fromJson(userJson);
+    debugPrint('✅ [getProfile] Profile loaded');
+    debugPrint('   User ID: ${user.id}');
+    debugPrint('   Name: ${user.name}');
+    debugPrint('   Phone: ${user.phone}');
+    debugPrint('   Wallet Balance: ${user.walletBalance}');
+    debugPrint('   Total Earned: ${user.totalEarned}');
+    debugPrint('   Total Redeemed: ${user.totalRedeemed}');
+    debugPrint('   Has Bank Details: ${user.hasBankDetails}');
+    debugPrint('   Has UPI: ${user.hasUpi}');
 
     return user;
   }
@@ -240,7 +301,7 @@ class UserApiService {
 
   /// GET /api/user/history
   static Future<List<TransactionModel>> getHistory() async {
-    dev.log('📜 [getHistory] Fetching transactions...', name: 'UserApiService');
+    debugPrint('📜 [getHistory] Fetching transaction history...');
 
     final data = await _request(
       method: 'GET',
@@ -248,13 +309,29 @@ class UserApiService {
       requiresAuth: true,
     );
 
-    final transactions = (data as List)
+    // 🔥 FIX: Backend may return { "transactions": [...] } or plain list
+    final List<dynamic> list;
+    if (data is List) {
+      list = data;
+    } else if (data is Map<String, dynamic> &&
+        data.containsKey('transactions')) {
+      list = data['transactions'] as List<dynamic>;
+    } else {
+      list = [];
+      debugPrint('⚠️ [getHistory] Unexpected response format');
+    }
+
+    final transactions = list
         .map((t) => TransactionModel.fromJson(t as Map<String, dynamic>))
         .toList();
 
-    dev.log(
-      '✅ [getHistory] count: ${transactions.length}',
-      name: 'UserApiService',
+    debugPrint('✅ [getHistory] Transactions loaded');
+    debugPrint('   Total Transactions: ${transactions.length}');
+    final earned = transactions.where((t) => t.isEarned).length;
+    final redeemed = transactions.where((t) => t.isRedeemed).length;
+    final withdrawn = transactions.where((t) => t.isWithdrawn).length;
+    debugPrint(
+      '   Earned: $earned  |  Redeemed: $redeemed  |  Withdrawn: $withdrawn',
     );
 
     return transactions;
@@ -265,35 +342,95 @@ class UserApiService {
   // ────────────────────────────────────────────────────────────
 
   /// POST /api/user/withdraw
+  ///
+  /// FIX: points sent as int (not double) to avoid backend rejection of 5000.0
   static Future<({double withdrawnPoints, double remainingBalance})>
   withdrawPoints(double points) async {
-    dev.log('💸 [withdrawPoints] points: $points', name: 'UserApiService');
+    debugPrint('💸 [withdrawPoints] Initiating withdrawal...');
+    debugPrint('   Points to Withdraw: $points');
 
     if (points <= 0) {
+      debugPrint('❌ [withdrawPoints] Invalid points amount: $points');
       throw ApiException(
         statusCode: 400,
         message: 'Enter a valid points amount',
       );
     }
 
+    // 🔥 FIX: Send as int — backend may reject 5000.0 format
     final data = await _request(
       method: 'POST',
       endpoint: '/user/withdraw',
-      body: {'points': points},
+      body: {'points': points.toInt()},
       requiresAuth: true,
     );
 
-    dev.log(
-      '✅ [withdrawPoints] withdrawn: ${data['withdrawn_points']}, remaining: ${data['remaining_balance']}',
-      name: 'UserApiService',
-    );
+    final withdrawnPoints =
+        double.tryParse(data['withdrawn_points'].toString()) ?? 0.0;
+    final remainingBalance =
+        double.tryParse(data['remaining_balance'].toString()) ?? 0.0;
+
+    debugPrint('✅ [withdrawPoints] Withdrawal successful');
+    debugPrint('   Withdrawn Points: $withdrawnPoints');
+    debugPrint('   Remaining Balance: $remainingBalance');
 
     return (
-      withdrawnPoints:
-          double.tryParse(data['withdrawn_points'].toString()) ?? 0.0,
-      remainingBalance:
-          double.tryParse(data['remaining_balance'].toString()) ?? 0.0,
+      withdrawnPoints: withdrawnPoints,
+      remainingBalance: remainingBalance,
     );
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // SAVE FCM TOKEN
+  // ────────────────────────────────────────────────────────────
+
+  /// POST /api/user/save-fcm-token
+  static Future<void> saveFcmToken(String fcmToken) async {
+    debugPrint('📱 [saveFcmToken] Saving FCM token...');
+
+    await _request(
+      method: 'POST',
+      endpoint: '/user/save-fcm-token',
+      body: {'fcm_token': fcmToken},
+      requiresAuth: true,
+    );
+
+    debugPrint('✅ [saveFcmToken] FCM token saved successfully');
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // SAVE BANK DETAILS
+  // ────────────────────────────────────────────────────────────
+
+  /// POST /api/user/save-bank-details
+  static Future<UserModel> saveBankDetails({
+    String? bankHolderName,
+    String? bankName,
+    String? accountNumber,
+    String? ifscCode,
+    String? upiId,
+  }) async {
+    debugPrint('🏦 [saveBankDetails] Saving bank details...');
+
+    final data = await _request(
+      method: 'POST',
+      endpoint: '/user/save-bank-details',
+      body: {
+        if (bankHolderName != null) 'bank_holder_name': bankHolderName,
+        if (bankName != null) 'bank_name': bankName,
+        if (accountNumber != null) 'account_number': accountNumber,
+        if (ifscCode != null) 'ifsc_code': ifscCode,
+        if (upiId != null) 'upi_id': upiId,
+      },
+      requiresAuth: true,
+    );
+
+    final user = UserModel.fromJson(data['user'] as Map<String, dynamic>);
+    debugPrint('✅ [saveBankDetails] Bank details saved');
+    debugPrint('   Account: ${user.accountNumber}');
+    debugPrint('   UPI: ${user.upiId}');
+
+    return user;
   }
 
   // ────────────────────────────────────────────────────────────
@@ -302,18 +439,18 @@ class UserApiService {
 
   /// GET /api/public/states
   static Future<List<String>> getStates() async {
-    dev.log('🗺️ [getStates] Fetching states...', name: 'UserApiService');
+    debugPrint('🗺️ [getStates] Fetching states list...');
 
     final data = await _request(method: 'GET', endpoint: '/public/states');
     final states = List<String>.from(data as List);
 
-    dev.log('✅ [getStates] count: ${states.length}', name: 'UserApiService');
+    debugPrint('✅ [getStates] States loaded: ${states.length}');
     return states;
   }
 
   /// GET /api/public/districts/:state
   static Future<List<String>> getDistricts(String state) async {
-    dev.log('🗺️ [getDistricts] state: $state', name: 'UserApiService');
+    debugPrint('🗺️ [getDistricts] Fetching districts for state: $state');
 
     final data = await _request(
       method: 'GET',
@@ -321,43 +458,38 @@ class UserApiService {
     );
     final districts = List<String>.from(data as List);
 
-    dev.log(
-      '✅ [getDistricts] count: ${districts.length}',
-      name: 'UserApiService',
-    );
+    debugPrint('✅ [getDistricts] Districts loaded: ${districts.length}');
     return districts;
   }
 
   /// GET /api/public/cities?state=&district=
   static Future<List<String>> getCities(String state, String district) async {
-    dev.log(
-      '🏙️ [getCities] state: $state, district: $district',
-      name: 'UserApiService',
-    );
+    debugPrint('🏙️ [getCities] Fetching cities...');
+    debugPrint('   State: $state  |  District: $district');
 
     final uri = Uri.parse(
       '$_baseUrl/public/cities',
     ).replace(queryParameters: {'state': state, 'district': district});
 
-    dev.log('📤 [GET] /public/cities → $uri', name: 'UserApiService');
+    debugPrint('📤 [GET] /public/cities → $uri');
 
     http.Response response;
     try {
       response = await http.get(uri).timeout(const Duration(seconds: 15));
     } catch (e) {
-      dev.log('🔴 [Network Error] /public/cities → $e', name: 'UserApiService');
+      debugPrint('🔴 [Network Error] /public/cities → $e');
       throw ApiException(
         statusCode: 0,
         message: 'Network error. Check your connection.',
       );
     }
 
-    dev.log(
-      '📥 [GET] /public/cities\n   Status: ${response.statusCode}\n   Body: ${response.body}',
-      name: 'UserApiService',
-    );
+    debugPrint('📥 [GET] /public/cities');
+    debugPrint('   Status: ${response.statusCode}');
+    debugPrint('   Body: ${response.body}');
 
     if (response.statusCode != 200) {
+      debugPrint('❌ [getCities] Failed with status: ${response.statusCode}');
       throw ApiException(
         statusCode: response.statusCode,
         message: 'Failed to fetch cities',
@@ -367,7 +499,7 @@ class UserApiService {
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     final cities = List<String>.from(decoded['cities'] ?? []);
 
-    dev.log('✅ [getCities] count: ${cities.length}', name: 'UserApiService');
+    debugPrint('✅ [getCities] Cities loaded: ${cities.length}');
     return cities;
   }
 }

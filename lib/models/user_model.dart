@@ -1,7 +1,5 @@
 // ============================================================
-// lib/models/models.dart
-// ============================================================
-// Single file — all models export ചെയ്യാം or split ചെയ്യാം
+// lib/models/user_model.dart
 // ============================================================
 
 // ────────────────────────────────────────────────────────────
@@ -25,6 +23,13 @@ class UserModel {
   final String status;
   final DateTime? createdAt;
 
+  // 🔥 Bank details
+  final String? bankHolderName;
+  final String? bankName;
+  final String? accountNumber;
+  final String? ifscCode;
+  final String? upiId;
+
   UserModel({
     required this.id,
     required this.phone,
@@ -41,6 +46,11 @@ class UserModel {
     this.qrCode,
     required this.status,
     this.createdAt,
+    this.bankHolderName,
+    this.bankName,
+    this.accountNumber,
+    this.ifscCode,
+    this.upiId,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -66,6 +76,11 @@ class UserModel {
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'])
           : null,
+      bankHolderName: json['bank_holder_name'],
+      bankName: json['bank_name'],
+      accountNumber: json['account_number'],
+      ifscCode: json['ifsc_code'],
+      upiId: json['upi_id'],
     );
   }
 
@@ -84,7 +99,45 @@ class UserModel {
     'total_redeemed': totalRedeemed,
     'qr_code': qrCode,
     'status': status,
+    'bank_holder_name': bankHolderName,
+    'bank_name': bankName,
+    'account_number': accountNumber,
+    'ifsc_code': ifscCode,
+    'upi_id': upiId,
   };
+
+  // ── Helpers ───────────────────────────────────────────────
+  bool get isActive => status == 'active';
+  bool get hasBankDetails => accountNumber != null && accountNumber!.isNotEmpty;
+  bool get hasUpi => upiId != null && upiId!.isNotEmpty;
+  String get displayName => name ?? phone;
+  String get displayBalance => '₹${walletBalance.toStringAsFixed(2)}';
+}
+
+// ────────────────────────────────────────────────────────────
+// LOCATION MODEL
+// ────────────────────────────────────────────────────────────
+
+class LocationModel {
+  final int? id;
+  final double? latitude;
+  final double? longitude;
+
+  LocationModel({this.id, this.latitude, this.longitude});
+
+  factory LocationModel.fromJson(Map<String, dynamic> json) {
+    return LocationModel(
+      id: json['id'],
+      latitude: json['latitude'] != null
+          ? (json['latitude'] as num).toDouble()
+          : null,
+      longitude: json['longitude'] != null
+          ? (json['longitude'] as num).toDouble()
+          : null,
+    );
+  }
+
+  bool get hasCoordinates => latitude != null && longitude != null;
 }
 
 // ────────────────────────────────────────────────────────────
@@ -106,6 +159,7 @@ class PartnerStoreModel {
   final String status;
   final String subscriptionStatus;
   final double walletBalance;
+  final LocationModel? location;
   final DateTime? createdAt;
 
   PartnerStoreModel({
@@ -123,6 +177,7 @@ class PartnerStoreModel {
     required this.status,
     required this.subscriptionStatus,
     required this.walletBalance,
+    this.location,
     this.createdAt,
   });
 
@@ -142,11 +197,25 @@ class PartnerStoreModel {
       status: json['status'] ?? 'pending',
       subscriptionStatus: json['subscription_status'] ?? 'inactive',
       walletBalance: double.tryParse(json['wallet_balance'].toString()) ?? 0.0,
+      location: json['location'] != null
+          ? LocationModel.fromJson(json['location'] as Map<String, dynamic>)
+          : null,
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'])
           : null,
     );
   }
+
+  // ── Helpers ───────────────────────────────────────────────
+  bool get isApproved => status == 'approved';
+  bool get isSubscriptionActive => subscriptionStatus == 'active';
+  bool get hasLocation => location?.hasCoordinates ?? false;
+  String get fullAddress => [
+    address,
+    city,
+    district,
+    state,
+  ].where((e) => e != null && e.isNotEmpty).join(', ');
 }
 
 // ────────────────────────────────────────────────────────────
@@ -193,6 +262,12 @@ class OfferModel {
           : null,
     );
   }
+
+  // ── Helpers ───────────────────────────────────────────────
+  bool get isExpired =>
+      expiryDate != null && expiryDate!.isBefore(DateTime.now());
+  bool get isPopup => offerType == 'popup';
+  bool get isNormal => offerType == 'normal';
 }
 
 // ────────────────────────────────────────────────────────────
@@ -202,11 +277,15 @@ class OfferModel {
 class TransactionModel {
   final int id;
   final int userId;
-  final int? storeId; // null for redemption transactions
+  final int? storeId;
   final double? purchaseAmount;
   final double? rewardPoints;
   final double? rewardPercentage;
-  final String transactionType; // "earned" | "redeemed"
+
+  // 🔥 FIX: Backend may use 'earned' | 'redeemed' | 'withdrawn'
+  // All three variants are now handled
+  final String transactionType;
+
   final DateTime? createdAt;
 
   TransactionModel({
@@ -241,14 +320,27 @@ class TransactionModel {
     );
   }
 
-  // Helper — UI-ൽ display ചെയ്യാൻ
+  // ── Helpers ───────────────────────────────────────────────
+
+  // 🔥 FIX: 'withdrawn' type also supported now
   bool get isEarned => transactionType == 'earned';
   bool get isRedeemed => transactionType == 'redeemed';
+  bool get isWithdrawn => transactionType == 'withdrawn';
+
+  // isDebit: points left the wallet (redeemed or withdrawn)
+  bool get isDebit => isRedeemed || isWithdrawn;
+
+  String get displayPoints =>
+      rewardPoints != null ? '${rewardPoints!.toStringAsFixed(0)} pts' : '—';
+  String get displayPurchase =>
+      purchaseAmount != null ? '₹${purchaseAmount!.toStringAsFixed(2)}' : '—';
+  String get displayRupeeValue => rewardPoints != null
+      ? '₹${(rewardPoints! * 0.10).toStringAsFixed(2)}'
+      : '—';
 }
 
 // ────────────────────────────────────────────────────────────
 // HOME RESPONSE MODEL
-// (GET /api/user/home response wrapper)
 // ────────────────────────────────────────────────────────────
 
 class HomeResponseModel {

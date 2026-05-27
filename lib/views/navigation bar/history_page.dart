@@ -206,30 +206,43 @@ class _HistoryPageState extends State<HistoryPage> {
   }
 
   Widget _buildError() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.wifi_off_rounded,
-            size: 48,
-            color: Color(0xFFFF2D78),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            _error!,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Color(0xFF888888)),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: _fetchHistory,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF2D78),
+    return RefreshIndicator(
+      color: const Color(0xFFFF2D78),
+      onRefresh: _fetchHistory,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.6,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.wifi_off_rounded,
+                  size: 48,
+                  color: Color(0xFFFF2D78),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  _error!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Color(0xFF888888)),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: _fetchHistory,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF2D78),
+                  ),
+                  child: const Text(
+                    'Retry',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
             ),
-            child: const Text('Retry', style: TextStyle(color: Colors.white)),
           ),
-        ],
+        ),
       ),
     );
   }
