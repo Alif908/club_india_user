@@ -1,3 +1,7 @@
+// ============================================================
+// lib/services/api_service.dart
+// ============================================================
+
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:club_india_user/models/user_model.dart';
@@ -8,8 +12,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 // CONFIG
 // ─────────────────────────────────────────────────────────────
 
-const String _baseUrl = 'https://coinapi.bestagencyindia.com/api';
-// const String _baseUrl = 'http://192.168.1.3:3030/api';
+// const String _baseUrl = 'https://coinapi.bestagencyindia.com/api';
+const String _baseUrl = 'http://192.168.1.6:3030/api';
+
 const String _tokenKey = 'user_token';
 
 // ─────────────────────────────────────────────────────────────
@@ -31,6 +36,8 @@ class ApiException implements Exception {
 // ─────────────────────────────────────────────────────────────
 
 class UserApiService {
+  static String get imageBaseUrl => _baseUrl.replaceAll('/api', '');
+
   // ── Token helpers ──────────────────────────────────────────
 
   static Future<void> _saveToken(String token) async {
@@ -51,7 +58,6 @@ class UserApiService {
     debugPrint('   Key: $_tokenKey');
     final prefs = await SharedPreferences.getInstance();
 
-    // All keys currently in SharedPreferences
     final allKeys = prefs.getKeys();
     debugPrint('   All SharedPrefs keys: $allKeys');
 
@@ -106,15 +112,19 @@ class UserApiService {
 
     if (requiresAuth) {
       final token = await _getToken();
+
       if (token == null || token.isEmpty) {
-        debugPrint('❌ [Auth] No token found — aborting request');
+        debugPrint('❌ [Auth] No token found');
         throw ApiException(
           statusCode: 401,
           message: 'No token found. Please login again.',
         );
       }
+
       headers['Authorization'] = 'Bearer $token';
+
       debugPrint('   Auth: Bearer token attached');
+      debugPrint('   Token length: ${token.length}');
     }
 
     if (body != null) {
@@ -126,8 +136,10 @@ class UserApiService {
     http.Response response;
 
     try {
-      switch (method) {
+      switch (method.toUpperCase()) {
         case 'POST':
+          debugPrint('🚀 Executing HTTP POST');
+
           response = await http
               .post(
                 uri,
@@ -136,14 +148,34 @@ class UserApiService {
               )
               .timeout(const Duration(seconds: 15));
           break;
+
+        case 'PUT':
+          debugPrint('🚀 Executing HTTP PUT');
+
+          response = await http
+              .put(
+                uri,
+                headers: headers,
+                body: body != null ? jsonEncode(body) : null,
+              )
+              .timeout(const Duration(seconds: 15));
+          break;
+
         case 'GET':
-        default:
+          debugPrint('🚀 Executing HTTP GET');
+
           response = await http
               .get(uri, headers: headers)
               .timeout(const Duration(seconds: 15));
+          break;
+
+        default:
+          throw Exception('Unsupported HTTP method: $method');
       }
     } catch (e) {
-      debugPrint('🔴 [Network Error] $endpoint → $e');
+      debugPrint('🔴 [Network Error] $endpoint');
+      debugPrint('   Error: $e');
+
       throw ApiException(
         statusCode: 0,
         message: 'Network error. Check your connection.',
@@ -155,15 +187,29 @@ class UserApiService {
     debugPrint('   Response Body: ${response.body}');
     debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-    final decoded = jsonDecode(response.body);
+    dynamic decoded;
+
+    try {
+      decoded = jsonDecode(response.body);
+    } catch (_) {
+      decoded = response.body;
+    }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      final msg = decoded is Map
-          ? decoded['message'] ?? 'Something went wrong'
-          : 'Something went wrong';
-      debugPrint('❌ [API Error] [$method] $endpoint → $msg');
+      String msg = 'Something went wrong';
+
+      if (decoded is Map && decoded['message'] != null) {
+        msg = decoded['message'].toString();
+      }
+
+      debugPrint('❌ [API Error]');
+      debugPrint('   Status: ${response.statusCode}');
+      debugPrint('   Message: $msg');
+
       throw ApiException(statusCode: response.statusCode, message: msg);
     }
+
+    debugPrint('✅ [API Success] $endpoint');
 
     return decoded;
   }
@@ -194,9 +240,7 @@ class UserApiService {
     required String otp,
     String? name,
     String? email,
-    String? state,
-    String? district,
-    String? city,
+
     double? latitude,
     double? longitude,
   }) async {
@@ -207,9 +251,6 @@ class UserApiService {
       'otp': otp,
       if (name != null) 'name': name,
       if (email != null) 'email': email,
-      if (state != null) 'state': state,
-      if (district != null) 'district': district,
-      if (city != null) 'city': city,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
     };
@@ -248,11 +289,20 @@ class UserApiService {
       requiresAuth: true,
     );
 
+    // 🔥 ADD THIS
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    debugPrint('📦 RAW HOME RESPONSE');
+    debugPrint(data.toString());
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
     final result = HomeResponseModel.fromJson(data as Map<String, dynamic>);
+
     debugPrint('✅ [getHome] Home data loaded');
     debugPrint('   Nearby Stores: ${result.nearbyStores.length}');
     debugPrint('   Offers: ${result.offers.length}');
     debugPrint('   User Wallet Balance: ${result.user.walletBalance}');
+    debugPrint('   Special Ad Active: ${result.specialAd?.active ?? false}');
+    debugPrint('   Popup Ad Active: ${result.popupAd?.active ?? false}');
 
     return result;
   }
@@ -262,9 +312,6 @@ class UserApiService {
   // ────────────────────────────────────────────────────────────
 
   /// GET /api/user/profile
-  ///
-  /// FIX: Backend returns { "user": {...} } wrapper — extracting data['user']
-  /// instead of casting the entire response directly as UserModel.
   static Future<UserModel> getProfile() async {
     debugPrint('👤 [getProfile] Fetching user profile...');
 
@@ -275,7 +322,6 @@ class UserApiService {
     );
 
     // 🔥 FIX: Backend wraps response in { "user": {...} }
-    // Safe fallback: if 'user' key missing, try parsing data directly
     final Map<String, dynamic> userJson =
         (data is Map<String, dynamic> && data.containsKey('user'))
         ? data['user'] as Map<String, dynamic>
@@ -342,8 +388,6 @@ class UserApiService {
   // ────────────────────────────────────────────────────────────
 
   /// POST /api/user/withdraw
-  ///
-  /// FIX: points sent as int (not double) to avoid backend rejection of 5000.0
   static Future<({double withdrawnPoints, double remainingBalance})>
   withdrawPoints(double points) async {
     debugPrint('💸 [withdrawPoints] Initiating withdrawal...');
@@ -448,6 +492,24 @@ class UserApiService {
     return states;
   }
 
+  //update location
+
+  static Future<void> updateLocation({
+    required double latitude,
+    required double longitude,
+  }) async {
+    debugPrint('📍 [updateLocation] Updating location...');
+
+    await _request(
+      method: 'PUT',
+      endpoint: '/user/update-location',
+      requiresAuth: true,
+      body: {'latitude': latitude, 'longitude': longitude},
+    );
+
+    debugPrint('✅ [updateLocation] Location updated');
+  }
+
   /// GET /api/public/districts/:state
   static Future<List<String>> getDistricts(String state) async {
     debugPrint('🗺️ [getDistricts] Fetching districts for state: $state');
@@ -501,5 +563,81 @@ class UserApiService {
 
     debugPrint('✅ [getCities] Cities loaded: ${cities.length}');
     return cities;
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // CITY OFFERS  (offers belonging to stores in user's city)
+  // ────────────────────────────────────────────────────────────
+
+  /// GET /api/user/city-offers
+  ///
+  /// Returns a list of [OfferModel] for stores in the user's city.
+  /// Backend response: plain array  [ {...}, {...} ]
+  static Future<List<OfferModel>> getCityOffers() async {
+    debugPrint('🎁 [getCityOffers] Fetching city offers...');
+
+    final data = await _request(
+      method: 'GET',
+      endpoint: '/user/city-offers',
+      requiresAuth: true,
+    );
+
+    // Backend returns a plain list
+    final List<dynamic> list;
+    if (data is List) {
+      list = data;
+    } else if (data is Map<String, dynamic> && data.containsKey('offers')) {
+      list = data['offers'] as List<dynamic>;
+    } else {
+      list = [];
+      debugPrint('⚠️ [getCityOffers] Unexpected response format');
+    }
+
+    final offers = list
+        .map((o) => OfferModel.fromJson(o as Map<String, dynamic>))
+        .toList();
+
+    debugPrint('✅ [getCityOffers] Loaded: ${offers.length} offers');
+    return offers;
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // CITY POPUPS  (popup ads belonging to stores in user's city)
+  // ────────────────────────────────────────────────────────────
+
+  /// GET /api/user/city-popups
+  ///
+  /// Returns a list of popup ads for the user's city.
+  /// We take the first active popup and show it as the home-page popup ad.
+  /// Backend response: plain array  [ { "active": true, "image": "https://..." }, ... ]
+  static Future<List<PopupAdModel>> getCityPopups() async {
+    debugPrint('📢 [getCityPopups] Fetching city popups...');
+
+    final data = await _request(
+      method: 'GET',
+      endpoint: '/user/city-popups',
+      requiresAuth: true,
+    );
+
+    // Backend returns a plain list
+    final List<dynamic> list;
+    if (data is List) {
+      list = data;
+    } else if (data is Map<String, dynamic> && data.containsKey('popups')) {
+      list = data['popups'] as List<dynamic>;
+    } else {
+      list = [];
+      debugPrint('⚠️ [getCityPopups] Unexpected response format');
+    }
+
+    final popups = list
+        .map((p) => PopupAdModel.fromJson(p as Map<String, dynamic>))
+        .toList();
+
+    debugPrint('✅ [getCityPopups] Loaded: ${popups.length} popups');
+    final active = popups.where((p) => p.shouldShow).length;
+    debugPrint('   Active & showable: $active');
+
+    return popups;
   }
 }

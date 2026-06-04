@@ -142,9 +142,138 @@ class _LoginCardState extends State<_LoginCard>
     }
   }
 
+  // ── Reverse geocode helper ──────────────────────────────────
+  // Returns (city, district, state) — all fields may be null/empty
+  // on failure; login always continues regardless.
+  // Future<({String? city, String? district, String? state})> _reverseGeocode(
+  //   double latitude,
+  //   double longitude,
+  // ) async {
+  //   try {
+  //     debugPrint('🗺️ [Geocode] Starting reverse geocode...');
+  //     debugPrint('   lat=$latitude  lng=$longitude');
+
+  //     final placemarks = await placemarkFromCoordinates(latitude, longitude)
+  //         .timeout(
+  //           const Duration(seconds: 10),
+  //           onTimeout: () {
+  //             debugPrint('⏰ [Geocode] Timed out after 10 s');
+  //             return [];
+  //           },
+  //         );
+
+  //     debugPrint('   Placemarks received: ${placemarks.length}');
+
+  //     if (placemarks.isEmpty) {
+  //       debugPrint('⚠️ [Geocode] Empty placemark list — skipping');
+  //       return (city: null, district: null, state: null);
+  //     }
+
+  //     final place = placemarks.first;
+
+  //     // Every field from geocoding can be null; guard each one
+  //     final city = (place.locality?.trim().isNotEmpty ?? false)
+  //         ? place.locality!.trim()
+  //         : null;
+  //     final district = (place.subAdministrativeArea?.trim().isNotEmpty ?? false)
+  //         ? place.subAdministrativeArea!.trim()
+  //         : null;
+  //     final state = (place.administrativeArea?.trim().isNotEmpty ?? false)
+  //         ? place.administrativeArea!.trim()
+  //         : null;
+
+  //     debugPrint('✅ [Geocode] city=$city  district=$district  state=$state');
+  //     return (city: city, district: district, state: state);
+  //   } catch (e, st) {
+  //     // Catches null-check errors inside the geocoding package too
+  //     debugPrint('❌ [Geocode] Reverse geocoding failed: $e');
+  //     debugPrint(st.toString());
+  //     return (city: null, district: null, state: null);
+  //   }
+  // }
+
   // ── Verify OTP ──────────────────────────────────────────────
+  // void _onVerifyOtp() async {
+  //   final otp = _otpController.text.trim();
+  //   if (otp.length < 6) {
+  //     _showSnack('Please enter the 6-digit OTP');
+  //     return;
+  //   }
+
+  //   setState(() => _isLoading = true);
+
+  //   double? latitude;
+  //   double? longitude;
+  //   String? city;
+  //   String? district;
+  //   String? state;
+
+  //   // ── Step 1: GPS ────────────────────────────────────────────
+  //   _showSnack('Fetching your location…');
+  //   final locationResult = await LocationService.getCurrentLocation();
+
+  //   if (locationResult is LocationSuccess) {
+  //     latitude = locationResult.latitude;
+  //     longitude = locationResult.longitude;
+  //     debugPrint('📍 GPS: $latitude, $longitude');
+
+  //     // ── Step 2: Reverse geocode (safe — never crashes login) ─
+  //     final geo = await _reverseGeocode(latitude, longitude);
+  //     city = geo.city;
+  //     district = geo.district;
+  //     state = geo.state;
+  //   } else if (locationResult is LocationFailure) {
+  //     debugPrint('⚠️ Location skipped: ${locationResult.reason}');
+  //     if (mounted) _showSnack('Location unavailable — continuing without it.');
+  //   }
+
+  //   // ── Step 3: Verify OTP with all available data ─────────────
+  //   try {
+  //     final phone = _phoneController.text.trim();
+
+  //     debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  //     debugPrint('🔐 [verifyOtp] Submitting...');
+  //     debugPrint('   phone    : $phone');
+  //     debugPrint('   city     : ${city ?? "null"}');
+  //     debugPrint('   district : ${district ?? "null"}');
+  //     debugPrint('   state    : ${state ?? "null"}');
+  //     debugPrint('   lat      : ${latitude ?? "null"}');
+  //     debugPrint('   lng      : ${longitude ?? "null"}');
+  //     debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+  //     final result = await UserApiService.verifyOtp(
+  //       phone: phone,
+  //       otp: otp,
+  //       state: state,
+  //       district: district,
+  //       city: city,
+  //       latitude: latitude,
+  //       longitude: longitude,
+  //     );
+
+  //     debugPrint('✅ Login successful — User: ${result.user.id}');
+
+  //     if (!mounted) return;
+
+  //     Navigator.pushAndRemoveUntil(
+  //       context,
+  //       MaterialPageRoute(builder: (_) => const MainNavScreen()),
+  //       (route) => false,
+  //     );
+  //   } on ApiException catch (e) {
+  //     if (!mounted) return;
+  //     setState(() => _isLoading = false);
+  //     _showSnack(e.message);
+  //   } catch (e) {
+  //     if (!mounted) return;
+  //     setState(() => _isLoading = false);
+  //     _showSnack('Network error. Check your connection.');
+  //   }
+  // }
+
   void _onVerifyOtp() async {
     final otp = _otpController.text.trim();
+
     if (otp.length < 6) {
       _showSnack('Please enter the 6-digit OTP');
       return;
@@ -155,34 +284,26 @@ class _LoginCardState extends State<_LoginCard>
     double? latitude;
     double? longitude;
 
-    _showSnack('Fetching your location…');
     final locationResult = await LocationService.getCurrentLocation();
 
     if (locationResult is LocationSuccess) {
       latitude = locationResult.latitude;
       longitude = locationResult.longitude;
-      debugPrint('📍 Location: $latitude, $longitude');
-    } else if (locationResult is LocationFailure) {
-      debugPrint('⚠️ Location skipped: ${locationResult.reason}');
-      if (mounted) _showSnack('Location unavailable — continuing without it.');
+
+      debugPrint('📍 GPS: $latitude, $longitude');
     }
 
     try {
       final phone = _phoneController.text.trim();
 
-      final result = await UserApiService.verifyOtp(
+      await UserApiService.verifyOtp(
         phone: phone,
         otp: otp,
         latitude: latitude,
         longitude: longitude,
       );
 
-      debugPrint('✅ Login successful — User: ${result.user.id}');
-
       if (!mounted) return;
-
-      // 🔥 FCM token save ചെയ്യാൻ — saveFcmToken optional call
-      // await UserApiService.saveFcmToken(fcmToken);
 
       Navigator.pushAndRemoveUntil(
         context,
@@ -193,10 +314,6 @@ class _LoginCardState extends State<_LoginCard>
       if (!mounted) return;
       setState(() => _isLoading = false);
       _showSnack(e.message);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      _showSnack('Network error. Check your connection.');
     }
   }
 

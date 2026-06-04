@@ -6,6 +6,8 @@
 // USER MODEL
 // ────────────────────────────────────────────────────────────
 
+import 'package:club_india_user/services/api_service.dart';
+
 class UserModel {
   final int id;
   final String phone;
@@ -283,7 +285,6 @@ class TransactionModel {
   final double? rewardPercentage;
 
   // 🔥 FIX: Backend may use 'earned' | 'redeemed' | 'withdrawn'
-  // All three variants are now handled
   final String transactionType;
 
   final DateTime? createdAt;
@@ -321,13 +322,9 @@ class TransactionModel {
   }
 
   // ── Helpers ───────────────────────────────────────────────
-
-  // 🔥 FIX: 'withdrawn' type also supported now
   bool get isEarned => transactionType == 'earned';
   bool get isRedeemed => transactionType == 'redeemed';
   bool get isWithdrawn => transactionType == 'withdrawn';
-
-  // isDebit: points left the wallet (redeemed or withdrawn)
   bool get isDebit => isRedeemed || isWithdrawn;
 
   String get displayPoints =>
@@ -340,6 +337,61 @@ class TransactionModel {
 }
 
 // ────────────────────────────────────────────────────────────
+// SPECIAL AD MODEL  (Home Page Banner)
+// ────────────────────────────────────────────────────────────
+
+class SpecialAdModel {
+  final bool active;
+  final String? image;
+  final String? title;
+  final String? description;
+  final String? actionUrl;
+
+  SpecialAdModel({
+    required this.active,
+    this.image,
+    this.title,
+    this.description,
+    this.actionUrl,
+  });
+
+  factory SpecialAdModel.fromJson(Map<String, dynamic> json) {
+    return SpecialAdModel(
+      active: json['active'] ?? false,
+      image: json['image'],
+      title: json['title'],
+      description: json['description'],
+      actionUrl: json['action_url'],
+    );
+  }
+
+  /// Show only when active AND image exists
+  bool get shouldShow => active && image != null && image!.isNotEmpty;
+}
+
+// ────────────────────────────────────────────────────────────
+// POPUP AD MODEL
+// ────────────────────────────────────────────────────────────
+
+class PopupAdModel {
+  final bool active;
+  final String? image;
+  final String? actionUrl;
+
+  PopupAdModel({required this.active, this.image, this.actionUrl});
+
+  factory PopupAdModel.fromJson(Map<String, dynamic> json) {
+    return PopupAdModel(
+      active: json['active'] ?? false,
+      image: json['image'],
+      actionUrl: json['action_url'],
+    );
+  }
+
+  bool get shouldShow => active && image != null && image!.isNotEmpty;
+}
+
+// ────────────────────────────────────────────────────────────
 // HOME RESPONSE MODEL
 // ────────────────────────────────────────────────────────────
 
@@ -347,11 +399,15 @@ class HomeResponseModel {
   final UserModel user;
   final List<PartnerStoreModel> nearbyStores;
   final List<OfferModel> offers;
+  final SpecialAdModel? specialAd;
+  final PopupAdModel? popupAd;
 
   HomeResponseModel({
     required this.user,
     required this.nearbyStores,
     required this.offers,
+    this.specialAd,
+    this.popupAd,
   });
 
   factory HomeResponseModel.fromJson(Map<String, dynamic> json) {
@@ -363,6 +419,22 @@ class HomeResponseModel {
       offers: (json['offers'] as List)
           .map((o) => OfferModel.fromJson(o as Map<String, dynamic>))
           .toList(),
+
+      specialAd: json['special_ad'] is Map<String, dynamic>
+          ? SpecialAdModel.fromJson(json['special_ad'] as Map<String, dynamic>)
+          : null,
+
+      // 🔥 Backend popups array support
+      popupAd: json['popups'] is List && (json['popups'] as List).isNotEmpty
+          ? PopupAdModel(
+              active:
+                  json['popups'][0]['is_active'] == true ||
+                  json['popups'][0]['is_active'] == 1,
+              image:
+                  '${UserApiService.imageBaseUrl}/uploads/${json['popups'][0]['banner']}',
+              actionUrl: json['popups'][0]['action_url'],
+            )
+          : null,
     );
   }
 }

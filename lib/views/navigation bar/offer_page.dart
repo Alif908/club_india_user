@@ -1,6 +1,7 @@
 import 'package:club_india_user/models/user_model.dart';
 import 'package:club_india_user/services/api_service.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 class SpecialOffersPage extends StatefulWidget {
   final VoidCallback? onBack;
@@ -28,19 +29,17 @@ class _SpecialOffersPageState extends State<SpecialOffersPage> {
       _loading = true;
       _error = null;
     });
-    try {
-      final home = await UserApiService.getHome();
 
-      // Build category list from actual offer types; 'All' always first
+    try {
+      final HomeResponseModel data = await UserApiService.getHome();
+      final List<OfferModel> cityOffers = data.offers;
       final cats = <String>{'All'};
-      for (final o in home.offers) {
+      for (final o in cityOffers) {
         if (o.offerType.isNotEmpty) cats.add(_formatCategory(o.offerType));
       }
-
       setState(() {
-        _offers = home.offers;
+        _offers = cityOffers;
         _categories = cats.toList();
-        // Reset selection if previous category no longer exists
         if (!_categories.contains(_selectedCategory)) {
           _selectedCategory = 'All';
         }
@@ -51,7 +50,7 @@ class _SpecialOffersPageState extends State<SpecialOffersPage> {
         _loading = false;
         _error = e.message;
       });
-    } catch (_) {
+    } catch (e) {
       setState(() {
         _loading = false;
         _error = 'Network error. Check your connection.';
@@ -59,7 +58,6 @@ class _SpecialOffersPageState extends State<SpecialOffersPage> {
     }
   }
 
-  /// Capitalise "normal" → "Normal", "popup" → "Popup", etc.
   String _formatCategory(String raw) =>
       raw.isEmpty ? raw : raw[0].toUpperCase() + raw.substring(1);
 
@@ -73,9 +71,6 @@ class _SpecialOffersPageState extends State<SpecialOffersPage> {
             )
             .toList();
 
-  // ── Offer → card display data ────────────────────────────────────────────
-
-  /// Pick a gradient based on offer index (cycles through palette)
   List<Color> _gradientFor(int index) {
     const palettes = [
       [Color(0xFF9B59B6), Color(0xFFFF6EB4)],
@@ -97,24 +92,203 @@ class _SpecialOffersPageState extends State<SpecialOffersPage> {
     }
   }
 
-  /// Format expiry date to "Valid till DD MMM YYYY"
   String _validTill(DateTime? date) {
     if (date == null) return 'No expiry';
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return 'Valid till ${date.day} ${months[date.month - 1]} ${date.year}';
+    return 'Valid till ${DateFormat('d MMM yyyy').format(date)}';
+  }
+
+  /// Build the full image URL from banner field
+  String? _buildBannerUrl(String? banner) {
+    if (banner == null || banner.isEmpty) return null;
+
+    // Already a full URL
+    if (banner.startsWith('http://') || banner.startsWith('https://')) {
+      debugPrint('🖼️ Banner is already full URL: $banner');
+      return banner;
+    }
+
+    // Relative path — prepend base URL
+    final fullUrl = '${UserApiService.imageBaseUrl}/uploads/$banner';
+    debugPrint('🖼️ Banner relative path: $banner');
+    debugPrint('🌐 Built full URL: $fullUrl');
+    return fullUrl;
+  }
+
+  void _showOfferDetails(BuildContext context, OfferModel offer, int index) {
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    debugPrint('📋 [OfferDetails] Offer ID   : ${offer.id}');
+    debugPrint('📋 [OfferDetails] Title      : ${offer.title}');
+    debugPrint('📋 [OfferDetails] Type       : ${offer.offerType}');
+    debugPrint('📋 [OfferDetails] Banner raw : ${offer.banner}');
+    debugPrint(
+      '📋 [OfferDetails] imageBaseUrl: ${UserApiService.imageBaseUrl}',
+    );
+
+    final bannerUrl = _buildBannerUrl(offer.banner);
+    debugPrint('📋 [OfferDetails] Final URL  : $bannerUrl');
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    final gradientColors = _gradientFor(index);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.75,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (_, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: ListView(
+            controller: scrollController,
+            padding: EdgeInsets.zero,
+            children: [
+              // Drag handle
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 12, bottom: 8),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+
+              // Banner image or fallback
+              if (bannerUrl != null)
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(20),
+                  ),
+                  child: Image.network(
+                    bannerUrl,
+                    height: 220,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (_, child, progress) => progress == null
+                        ? child
+                        : Container(
+                            height: 220,
+                            color: Colors.grey.shade100,
+                            child: const Center(
+                              child: CircularProgressIndicator(
+                                color: Color(0xFFFF2D78),
+                              ),
+                            ),
+                          ),
+                    errorBuilder: (_, error, __) {
+                      debugPrint('❌ [OfferDetails] Image load failed: $error');
+                      debugPrint('   Failed URL: $bannerUrl');
+                      return _fallbackBanner(gradientColors, offer.offerType);
+                    },
+                  ),
+                )
+              else
+                _fallbackBanner(gradientColors, offer.offerType),
+
+              // Details
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Category badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(colors: gradientColors),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        _formatCategory(offer.offerType),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Title
+                    Text(
+                      offer.title,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1C1C2E),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Description
+                    if (offer.description != null &&
+                        offer.description!.isNotEmpty)
+                      Text(
+                        offer.description!,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          color: Color(0xFF4A4A68),
+                          height: 1.5,
+                        ),
+                      ),
+
+                    const SizedBox(height: 16),
+                    const Divider(),
+                    const SizedBox(height: 12),
+
+                    // Expiry
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.access_time_rounded,
+                          size: 18,
+                          color: Color(0xFFFF2D78),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _validTill(offer.expiryDate),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF8E8E93),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _fallbackBanner(List<Color> colors, String offerType) {
+    return Container(
+      height: 160,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: colors,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Center(
+        child: Icon(_iconFor(offerType), color: Colors.white, size: 60),
+      ),
+    );
   }
 
   @override
@@ -127,9 +301,7 @@ class _SpecialOffersPageState extends State<SpecialOffersPage> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Color(0xFF1C1C2E)),
           onPressed: () {
-            if (widget.onBack != null) {
-              widget.onBack!();
-            }
+            if (widget.onBack != null) widget.onBack!();
           },
         ),
         title: const Text(
@@ -240,214 +412,147 @@ class _SpecialOffersPageState extends State<SpecialOffersPage> {
   }
 
   Widget _buildOfferCard({required OfferModel offer, required int index}) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Column(
-          children: [
-            // ── Gradient Header ──────────────────────────────────────
-            Container(
-              constraints: const BoxConstraints(minHeight: 100),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: _gradientFor(index),
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                ),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          _iconFor(offer.offerType),
-                          color: Colors.white,
-                          size: 26,
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          offer.title,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                          softWrap: true,
-                          overflow: TextOverflow.visible,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  // Store ID badge (store name not in OfferModel;
-                  // show offer type as badge instead)
-                  Flexible(
-                    flex: 0,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 7,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.25),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        _formatCategory(offer.offerType),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // ── White Body ───────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    offer.description ?? '',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF1C1C2E),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Flexible(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.access_time,
-                              size: 14,
-                              color: Color(0xFF8E8E93),
-                            ),
-                            const SizedBox(width: 5),
-                            Flexible(
-                              child: Text(
-                                _validTill(offer.expiryDate),
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: Color(0xFF8E8E93),
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      GestureDetector(
-                        onTap: () => _showClaimDialog(context, offer),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 22,
-                            vertical: 9,
-                          ),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFFFF80AB), Color(0xFFFF2D78)],
-                            ),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Text(
-                            'Claim',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+    return GestureDetector(
+      onTap: () => _showOfferDetails(context, offer, index),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  void _showClaimDialog(BuildContext context, OfferModel offer) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          offer.title,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        content: Text('Claim "${offer.title}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: Color(0xFF8E8E93)),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('${offer.title} claimed successfully! 🎉'),
-                  backgroundColor: const Color(0xFFFF2D78),
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Column(
+            children: [
+              // Gradient Header
+              Container(
+                constraints: const BoxConstraints(minHeight: 100),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: _gradientFor(index),
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
                   ),
                 ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF2D78),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 16,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _iconFor(offer.offerType),
+                            color: Colors.white,
+                            size: 26,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            offer.title,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                            softWrap: true,
+                            overflow: TextOverflow.visible,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      flex: 0,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 7,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.25),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          _formatCategory(offer.offerType),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            child: const Text('Claim', style: TextStyle(color: Colors.white)),
+
+              // White Body
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      offer.description ?? '',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF1C1C2E),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.access_time,
+                          size: 14,
+                          color: Color(0xFF8E8E93),
+                        ),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            _validTill(offer.expiryDate),
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Color(0xFF8E8E93),
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const Spacer(),
+                        const Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          size: 14,
+                          color: Color(0xFFFF2D78),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Category filter header (unchanged)
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// Category filter header
+// ─────────────────────────────────────────────────────────────
 
 class _CategoryFilterDelegate extends SliverPersistentHeaderDelegate {
   final List<String> categories;
