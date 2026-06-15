@@ -4,6 +4,9 @@
 
 import 'package:club_india_user/models/user_model.dart';
 import 'package:club_india_user/services/api_service.dart';
+import 'package:club_india_user/views/legal%20page/addition_legal_screen.dart';
+import 'package:club_india_user/views/legal%20page/policy_screen.dart';
+import 'package:club_india_user/views/legal%20page/terms_screen.dart';
 import 'package:club_india_user/views/login_page.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -37,7 +40,6 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       final user = await UserApiService.getProfile();
 
-      // 🔥 Debug: Location fields
       debugPrint('📍 [ProfilePage] Location fields from API:');
       debugPrint('   city     : "${user.city}"');
       debugPrint('   district : "${user.district}"');
@@ -45,7 +47,6 @@ class _ProfilePageState extends State<ProfilePage> {
       debugPrint('   latitude : ${user.latitude}');
       debugPrint('   longitude: ${user.longitude}');
 
-      // 🔥 Debug: Bank fields
       debugPrint('🏦 [ProfilePage] Bank fields from API:');
       debugPrint('   bankHolderName: "${user.bankHolderName}"');
       debugPrint('   bankName      : "${user.bankName}"');
@@ -233,7 +234,6 @@ class _ProfileInfoCard extends StatelessWidget {
   String get _displayName =>
       (user.name?.isNotEmpty == true) ? user.name! : user.phone;
 
-  // 🔥 FIX: Null-safe location — only non-null, non-empty parts joined
   String get _location {
     final parts = <String>[
       if (user.city?.isNotEmpty == true) user.city!,
@@ -285,7 +285,6 @@ class _ProfileInfoCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 16),
-              // 🔥 FIX: Expanded prevents name from overflowing on narrow screens
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -328,7 +327,6 @@ class _ProfileInfoCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 20),
-          // 🔥 FIX: Location row — value can be long, needs proper wrapping
           _InfoRow(
             icon: Icons.location_on_outlined,
             label: 'Location',
@@ -435,7 +433,6 @@ class _StatBox extends StatelessWidget {
             style: const TextStyle(fontSize: 10.5, color: Color(0xFF999999)),
           ),
           const SizedBox(height: 4),
-          // 🔥 FIX: FittedBox prevents large numbers from overflowing narrow boxes
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
@@ -482,7 +479,6 @@ class _BankDetailsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 🔥 FIX: Removed `const` so widget rebuilds with dynamic user data
           Row(
             children: [
               const Icon(
@@ -544,8 +540,6 @@ class _BankDetailsCard extends StatelessWidget {
 
 // ─────────────────────────────────────────────────────────────
 // Info Row
-// 🔥 FIX: `Expanded` added to value column so long strings wrap
-//         instead of overflowing the row
 // ─────────────────────────────────────────────────────────────
 
 class _InfoRow extends StatelessWidget {
@@ -562,14 +556,13 @@ class _InfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start, // 🔥 FIX: start not center
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.only(top: 2),
           child: Icon(icon, size: 20, color: const Color(0xFFFF2D78)),
         ),
         const SizedBox(width: 14),
-        // 🔥 FIX: Expanded wraps long values (location, email, UPI ID)
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -596,7 +589,7 @@ class _InfoRow extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Settings Menu
+// Settings Menu  ← UPDATED: Legal tiles added
 // ─────────────────────────────────────────────────────────────
 
 class _SettingsMenu extends StatelessWidget {
@@ -607,51 +600,126 @@ class _SettingsMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFF0F0F0), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
+    return Column(
+      children: [
+        // ── General settings card ──────────────────────────
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFF0F0F0), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Column(
-        children: [
-          _SettingsTile(
-            icon: Icons.notifications_outlined,
-            iconColor: const Color(0xFF5B8DEF),
-            label: 'Notifications',
-            onTap: () {},
+          child: Column(
+            children: [
+              _SettingsTile(
+                icon: Icons.notifications_outlined,
+                iconColor: const Color(0xFF5B8DEF),
+                label: 'Notifications',
+                onTap: () {},
+              ),
+              _Divider(),
+
+              _Divider(),
+              _SettingsTile(
+                icon: Icons.help_outline_rounded,
+                iconColor: const Color(0xFF9B59B6),
+                label: 'Help & Support',
+                onTap: () {},
+              ),
+              _Divider(),
+            ],
           ),
-          _Divider(),
-          _SettingsTile(
-            icon: Icons.shield_outlined,
-            iconColor: const Color(0xFF2DB87D),
-            label: 'Privacy & Security',
-            onTap: () {},
+        ),
+
+        const SizedBox(height: 14),
+
+        // ── Legal card ─────────────────────────────────────
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFF0F0F0), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-          _Divider(),
-          _SettingsTile(
-            icon: Icons.help_outline_rounded,
-            iconColor: const Color(0xFF9B59B6),
-            label: 'Help & Support',
-            onTap: () {},
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 14, 18, 2),
+                child: Text(
+                  'LEGAL',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.grey.shade400,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+              _SettingsTile(
+                icon: Icons.description_outlined,
+                iconColor: const Color(0xFF5B8DEF),
+                label: 'Terms & Conditions',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const TermsAndConditionsPage(),
+                  ),
+                ),
+              ),
+              _Divider(),
+              _SettingsTile(
+                icon: Icons.privacy_tip_outlined,
+                iconColor: const Color(0xFF2DB87D),
+                label: 'Privacy Policy',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PrivacyPolicyPage()),
+                ),
+              ),
+              _Divider(),
+              _SettingsTile(
+                icon: Icons.gavel_rounded,
+                iconColor: const Color(0xFFFF9500),
+                label: 'Additional Legal Policies',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AdditionalLegalPoliciesPage(),
+                  ),
+                ),
+              ),
+              _SettingsTile(
+                icon: Icons.logout_rounded,
+                iconColor: const Color(0xFFFF3B30),
+                label: 'Logout',
+                labelColor: const Color(0xFFFF3B30),
+                onTap: () => _showLogoutDialog(context),
+              ),
+            ],
           ),
-          _Divider(),
-          _SettingsTile(
-            icon: Icons.logout_rounded,
-            iconColor: const Color(0xFFFF3B30),
-            label: 'Logout',
-            labelColor: const Color(0xFFFF3B30),
-            onTap: () => _showLogoutDialog(context),
-          ),
-        ],
-      ),
+        ),
+
+        const SizedBox(height: 14),
+
+        // ── Delete account ─────────────────────────────────
+        _DeleteAccountButton(),
+
+        const SizedBox(height: 50),
+      ],
     );
   }
 
@@ -697,6 +765,10 @@ class _SettingsMenu extends StatelessWidget {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────
+// Settings Tile
+// ─────────────────────────────────────────────────────────────
 
 class _SettingsTile extends StatelessWidget {
   final IconData icon;
@@ -754,6 +826,102 @@ class _Divider extends StatelessWidget {
       thickness: 1,
       indent: 54,
       color: Color(0xFFF5F5F5),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Delete Account Button
+// ─────────────────────────────────────────────────────────────
+
+class _DeleteAccountButton extends StatelessWidget {
+  const _DeleteAccountButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () async {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Text(
+              'Delete Account',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1A1A2E),
+              ),
+            ),
+            content: const Text(
+              'You will be redirected to the account deletion page. This action is irreversible. Do you want to continue?',
+              style: TextStyle(color: Color(0xFF666666)),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(color: Color(0xFF999999)),
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text(
+                  'Continue',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+
+        if (confirmed != true) return;
+
+        try {
+          await UserApiService.openDeleteAccountPage();
+        } catch (e) {
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(e.toString())));
+        }
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.red.withOpacity(.25)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.delete_forever_rounded, color: Colors.red),
+            SizedBox(width: 10),
+            Text(
+              'Delete Account',
+              style: TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -41,48 +41,46 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyCaMT4mTavlaMC6ROQZNjf6XAA1eejfRH4',
-    appId: '1:248980108990:web:079024a3c919da77e550ef',
-    messagingSenderId: '248980108990',
-    projectId: 'club-india-user',
-    authDomain: 'club-india-user.firebaseapp.com',
-    storageBucket: 'club-india-user.firebasestorage.app',
-    measurementId: 'G-JGN5YXR8QJ',
+    apiKey: 'AIzaSyDlSJOnL_kjIHZJtMJzxLmp0RrJ3qgZ2zA',
+    appId: '1:713808133886:web:2e2f866768ffdaa7142faf',
+    messagingSenderId: '713808133886',
+    projectId: 'clubindia-rewards',
+    authDomain: 'clubindia-rewards.firebaseapp.com',
+    storageBucket: 'clubindia-rewards.firebasestorage.app',
+    measurementId: 'G-DK584P8TKH',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyD1ZDUkmU00ypA66K0j9dkHghv_JVuuNPg',
-    appId: '1:248980108990:android:f7fec79ff0db1252e550ef',
-    messagingSenderId: '248980108990',
-    projectId: 'club-india-user',
-    storageBucket: 'club-india-user.firebasestorage.app',
+    apiKey: 'AIzaSyDqPXwkF6_CIVSYhWZ8iUgVrC-BWmnctiQ',
+    appId: '1:713808133886:android:8a45617a168cabc8142faf',
+    messagingSenderId: '713808133886',
+    projectId: 'clubindia-rewards',
+    storageBucket: 'clubindia-rewards.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyB55ds6TrgU2vYaB9ELlJJs-JeplwWDUs4',
-    appId: '1:248980108990:ios:7ed6f42690099fafe550ef',
-    messagingSenderId: '248980108990',
-    projectId: 'club-india-user',
-    storageBucket: 'club-india-user.firebasestorage.app',
+    apiKey: 'AIzaSyAvRYzkjSySIfqODE6S1WMSp0ZxAbIFMYY',
+    appId: '1:713808133886:ios:a11c1393f90edfec142faf',
+    messagingSenderId: '713808133886',
+    projectId: 'clubindia-rewards',
+    storageBucket: 'clubindia-rewards.firebasestorage.app',
     iosBundleId: 'com.example.clubIndiaUser',
   );
-
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyB55ds6TrgU2vYaB9ELlJJs-JeplwWDUs4',
-    appId: '1:248980108990:ios:7ed6f42690099fafe550ef',
-    messagingSenderId: '248980108990',
-    projectId: 'club-india-user',
-    storageBucket: 'club-india-user.firebasestorage.app',
+    apiKey: 'AIzaSyAvRYzkjSySIfqODE6S1WMSp0ZxAbIFMYY',
+    appId: '1:713808133886:ios:a11c1393f90edfec142faf',
+    messagingSenderId: '713808133886',
+    projectId: 'clubindia-rewards',
+    storageBucket: 'clubindia-rewards.firebasestorage.app',
     iosBundleId: 'com.example.clubIndiaUser',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyCaMT4mTavlaMC6ROQZNjf6XAA1eejfRH4',
-    appId: '1:248980108990:web:a93471891871f0e7e550ef',
-    messagingSenderId: '248980108990',
-    projectId: 'club-india-user',
-    authDomain: 'club-india-user.firebaseapp.com',
-    storageBucket: 'club-india-user.firebasestorage.app',
-    measurementId: 'G-6TXK4GLWFZ',
+    apiKey: 'AIzaSyDlSJOnL_kjIHZJtMJzxLmp0RrJ3qgZ2zA',
+    appId: '1:713808133886:web:9776048671e02281142faf',
+    messagingSenderId: '713808133886',
+    projectId: 'clubindia-rewards',
+    authDomain: 'clubindia-rewards.firebaseapp.com',
+    storageBucket: 'clubindia-rewards.firebasestorage.app',
+    measurementId: 'G-BYGNGBREGV',
   );
 }

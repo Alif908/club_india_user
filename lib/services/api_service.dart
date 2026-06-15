@@ -1,19 +1,16 @@
-// ============================================================
-// lib/services/api_service.dart
-// ============================================================
-
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:club_india_user/models/user_model.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // ─────────────────────────────────────────────────────────────
 // CONFIG
 // ─────────────────────────────────────────────────────────────
 
-// const String _baseUrl = 'https://coinapi.bestagencyindia.com/api';
-const String _baseUrl = 'http://192.168.1.6:3030/api';
+const String _baseUrl = 'https://coinapi.bestagencyindia.com/api';
+// const String _baseUrl = 'http://192.168.1.6:3030/api';
 
 const String _tokenKey = 'user_token';
 
@@ -193,6 +190,22 @@ class UserApiService {
       decoded = jsonDecode(response.body);
     } catch (_) {
       decoded = response.body;
+    }
+
+    if (response.statusCode == 401) {
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      debugPrint('🔒 TOKEN EXPIRED / UNAUTHORIZED');
+      debugPrint('Status : ${response.statusCode}');
+      debugPrint('URL    : $endpoint');
+      debugPrint('Action : Clear Token');
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+      await logout();
+
+      throw ApiException(
+        statusCode: 401,
+        message: 'Session expired. Please login again.',
+      );
     }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -639,5 +652,16 @@ class UserApiService {
     debugPrint('   Active & showable: $active');
 
     return popups;
+  }
+  //delete account
+
+  static Future<void> openDeleteAccountPage() async {
+    final Uri url = Uri.parse(
+      'https://coinapi.bestagencyindia.com/delete-user.html',
+    );
+
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      throw Exception('Could not launch $url');
+    }
   }
 }

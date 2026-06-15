@@ -173,7 +173,7 @@ class _ClubIndiaLogo extends StatelessWidget {
         ).createShader(bounds);
       },
       child: const Text(
-        'ClubIndia',
+        'Badacoin.',
         style: TextStyle(
           fontSize: 48,
           fontWeight: FontWeight.bold,

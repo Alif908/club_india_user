@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "248980108990",
-    "project_id": "club-india-user",
-    "storage_bucket": "club-india-user.firebasestorage.app"
+    "project_number": "713808133886",
+    "project_id": "clubindia-rewards",
+    "storage_bucket": "clubindia-rewards.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:248980108990:android:f7fec79ff0db1252e550ef",
+        "mobilesdk_app_id": "1:713808133886:android:8a45617a168cabc8142faf",
         "android_client_info": {
           "package_name": "com.example.club_india_user"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyD1ZDUkmU00ypA66K0j9dkHghv_JVuuNPg"
+          "current_key": "AIzaSyDqPXwkF6_CIVSYhWZ8iUgVrC-BWmnctiQ"
         }
       ],
       "services": {
@@ -26,15 +26,34 @@
     },
     {
       "client_info": {
-        "mobilesdk_app_id": "1:248980108990:android:eb51d4e1cca92d12e550ef",
+        "mobilesdk_app_id": "1:713808133886:android:2fb95b7f0319a87a142faf",
         "android_client_info": {
-          "package_name": "com.example.premium_mobile_app"
+          "package_name": "com.example.field_employe_app"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyD1ZDUkmU00ypA66K0j9dkHghv_JVuuNPg"
+          "current_key": "AIzaSyDqPXwkF6_CIVSYhWZ8iUgVrC-BWmnctiQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:713808133886:android:81da8db49d4d163c142faf",
+        "android_client_info": {
+          "package_name": "com.example.premium_m_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDqPXwkF6_CIVSYhWZ8iUgVrC-BWmnctiQ"
         }
       ],
       "services": {

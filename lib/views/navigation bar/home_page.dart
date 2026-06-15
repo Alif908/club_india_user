@@ -8,6 +8,7 @@ import 'dart:typed_data';
 
 import 'package:club_india_user/models/user_model.dart';
 import 'package:club_india_user/services/api_service.dart';
+import 'package:club_india_user/views/login_page.dart';
 import 'package:club_india_user/views/navigation%20bar/redeem_point_screen.dart';
 import 'package:club_india_user/views/navigation_bar_page.dart';
 import 'package:flutter/material.dart';
@@ -118,6 +119,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _fetchHome() async {
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    debugPrint('🏠 HOME API CALL STARTED');
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     try {
       final HomeResponseModel data = await UserApiService.getHome();
 
@@ -151,6 +155,26 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         });
       }
     } on ApiException catch (e) {
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      debugPrint('❌ API EXCEPTION');
+      debugPrint('Status  : ${e.statusCode}');
+      debugPrint('Message : ${e.message}');
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+      if (e.statusCode == 401) {
+        debugPrint('🔄 Redirecting to LoginPage');
+
+        if (!mounted) return;
+
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginPage()),
+          (route) => false,
+        );
+
+        return;
+      }
+
       if (!mounted) return;
 
       setState(() {
@@ -173,7 +197,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void _showPopupAd() {
     debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     debugPrint('🎬 [Ad] _showPopupAd() called');
-      debugPrint('📢 Popup Image Raw = ${_popupAd?.image}');
+    debugPrint('📢 Popup Image Raw = ${_popupAd?.image}');
     debugPrint('   Image URL: ${_popupAd!.image}');
     debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     showDialog(

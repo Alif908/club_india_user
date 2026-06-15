@@ -4,8 +4,13 @@
 
 import 'package:club_india_user/services/api_service.dart';
 import 'package:club_india_user/services/location_service.dart';
+import 'package:club_india_user/views/legal%20page/policy_screen.dart';
+import 'package:club_india_user/views/legal%20page/terms_screen.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/gestures.dart';
+import 'package:geolocator/geolocator.dart';
 
 import 'navigation_bar_page.dart';
 
@@ -59,6 +64,7 @@ class _LoginCardState extends State<_LoginCard>
 
   bool _otpSent = false;
   bool _isLoading = false;
+  bool _isTermsAccepted = false;
 
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
@@ -76,6 +82,34 @@ class _LoginCardState extends State<_LoginCard>
         .animate(
           CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic),
         );
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkLocation();
+    });
+  }
+
+  Future<void> _checkLocation() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+
+    if (!serviceEnabled && mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('Location Required'),
+          content: const Text('Please turn on your location to continue.'),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await Geolocator.openLocationSettings();
+              },
+              child: const Text('Enable Location'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   @override
@@ -105,6 +139,11 @@ class _LoginCardState extends State<_LoginCard>
     final phone = _phoneController.text.trim();
     if (phone.length < 10) {
       _showSnack('Please enter a valid 10-digit mobile number');
+      return;
+    }
+
+    if (!_isTermsAccepted) {
+      _showSnack('Please accept the Terms & Conditions and Privacy Policy');
       return;
     }
 
@@ -142,135 +181,6 @@ class _LoginCardState extends State<_LoginCard>
     }
   }
 
-  // ── Reverse geocode helper ──────────────────────────────────
-  // Returns (city, district, state) — all fields may be null/empty
-  // on failure; login always continues regardless.
-  // Future<({String? city, String? district, String? state})> _reverseGeocode(
-  //   double latitude,
-  //   double longitude,
-  // ) async {
-  //   try {
-  //     debugPrint('🗺️ [Geocode] Starting reverse geocode...');
-  //     debugPrint('   lat=$latitude  lng=$longitude');
-
-  //     final placemarks = await placemarkFromCoordinates(latitude, longitude)
-  //         .timeout(
-  //           const Duration(seconds: 10),
-  //           onTimeout: () {
-  //             debugPrint('⏰ [Geocode] Timed out after 10 s');
-  //             return [];
-  //           },
-  //         );
-
-  //     debugPrint('   Placemarks received: ${placemarks.length}');
-
-  //     if (placemarks.isEmpty) {
-  //       debugPrint('⚠️ [Geocode] Empty placemark list — skipping');
-  //       return (city: null, district: null, state: null);
-  //     }
-
-  //     final place = placemarks.first;
-
-  //     // Every field from geocoding can be null; guard each one
-  //     final city = (place.locality?.trim().isNotEmpty ?? false)
-  //         ? place.locality!.trim()
-  //         : null;
-  //     final district = (place.subAdministrativeArea?.trim().isNotEmpty ?? false)
-  //         ? place.subAdministrativeArea!.trim()
-  //         : null;
-  //     final state = (place.administrativeArea?.trim().isNotEmpty ?? false)
-  //         ? place.administrativeArea!.trim()
-  //         : null;
-
-  //     debugPrint('✅ [Geocode] city=$city  district=$district  state=$state');
-  //     return (city: city, district: district, state: state);
-  //   } catch (e, st) {
-  //     // Catches null-check errors inside the geocoding package too
-  //     debugPrint('❌ [Geocode] Reverse geocoding failed: $e');
-  //     debugPrint(st.toString());
-  //     return (city: null, district: null, state: null);
-  //   }
-  // }
-
-  // ── Verify OTP ──────────────────────────────────────────────
-  // void _onVerifyOtp() async {
-  //   final otp = _otpController.text.trim();
-  //   if (otp.length < 6) {
-  //     _showSnack('Please enter the 6-digit OTP');
-  //     return;
-  //   }
-
-  //   setState(() => _isLoading = true);
-
-  //   double? latitude;
-  //   double? longitude;
-  //   String? city;
-  //   String? district;
-  //   String? state;
-
-  //   // ── Step 1: GPS ────────────────────────────────────────────
-  //   _showSnack('Fetching your location…');
-  //   final locationResult = await LocationService.getCurrentLocation();
-
-  //   if (locationResult is LocationSuccess) {
-  //     latitude = locationResult.latitude;
-  //     longitude = locationResult.longitude;
-  //     debugPrint('📍 GPS: $latitude, $longitude');
-
-  //     // ── Step 2: Reverse geocode (safe — never crashes login) ─
-  //     final geo = await _reverseGeocode(latitude, longitude);
-  //     city = geo.city;
-  //     district = geo.district;
-  //     state = geo.state;
-  //   } else if (locationResult is LocationFailure) {
-  //     debugPrint('⚠️ Location skipped: ${locationResult.reason}');
-  //     if (mounted) _showSnack('Location unavailable — continuing without it.');
-  //   }
-
-  //   // ── Step 3: Verify OTP with all available data ─────────────
-  //   try {
-  //     final phone = _phoneController.text.trim();
-
-  //     debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  //     debugPrint('🔐 [verifyOtp] Submitting...');
-  //     debugPrint('   phone    : $phone');
-  //     debugPrint('   city     : ${city ?? "null"}');
-  //     debugPrint('   district : ${district ?? "null"}');
-  //     debugPrint('   state    : ${state ?? "null"}');
-  //     debugPrint('   lat      : ${latitude ?? "null"}');
-  //     debugPrint('   lng      : ${longitude ?? "null"}');
-  //     debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-
-  //     final result = await UserApiService.verifyOtp(
-  //       phone: phone,
-  //       otp: otp,
-  //       state: state,
-  //       district: district,
-  //       city: city,
-  //       latitude: latitude,
-  //       longitude: longitude,
-  //     );
-
-  //     debugPrint('✅ Login successful — User: ${result.user.id}');
-
-  //     if (!mounted) return;
-
-  //     Navigator.pushAndRemoveUntil(
-  //       context,
-  //       MaterialPageRoute(builder: (_) => const MainNavScreen()),
-  //       (route) => false,
-  //     );
-  //   } on ApiException catch (e) {
-  //     if (!mounted) return;
-  //     setState(() => _isLoading = false);
-  //     _showSnack(e.message);
-  //   } catch (e) {
-  //     if (!mounted) return;
-  //     setState(() => _isLoading = false);
-  //     _showSnack('Network error. Check your connection.');
-  //   }
-  // }
-
   void _onVerifyOtp() async {
     final otp = _otpController.text.trim();
 
@@ -302,6 +212,16 @@ class _LoginCardState extends State<_LoginCard>
         latitude: latitude,
         longitude: longitude,
       );
+
+      // 🔥 Get FCM Token
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+
+      debugPrint('FCM TOKEN => $fcmToken');
+
+      // 🔥 Save token to backend
+      if (fcmToken != null && fcmToken.isNotEmpty) {
+        await UserApiService.saveFcmToken(fcmToken);
+      }
 
       if (!mounted) return;
 
@@ -352,33 +272,30 @@ class _LoginCardState extends State<_LoginCard>
         children: [
           Center(
             child: Container(
-              width: 64 * s,
-              height: 64 * s,
+              width: 200 * s,
+              height: 110 * s,
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFFF2D78), Color(0xFFFFAACC)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFFFF2D78).withOpacity(0.30),
-                    blurRadius: 16,
-                    offset: const Offset(0, 4),
+                    color: const Color(0xFFF8BBD0).withOpacity(0.4),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
                   ),
                 ],
               ),
-              child: Icon(
-                Icons.card_membership_rounded,
-                color: Colors.white,
-                size: 30 * s,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: Image.asset(
+                  'assets/logo/badacoinuser.jpg',
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
           ),
           SizedBox(height: 20 * s),
           Text(
-            'Club India',
+            'Badacoin.',
             style: TextStyle(
               fontSize: (26 * s).clamp(20.0, 30.0),
               fontWeight: FontWeight.bold,
@@ -470,24 +387,105 @@ class _LoginCardState extends State<_LoginCard>
                   )
                 : const SizedBox.shrink(),
           ),
-          SizedBox(height: 28 * s),
+          SizedBox(height: 16 * s),
+
+          // ─── T&C Checkbox ────────────────────────────────────────
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _isTermsAccepted = !_isTermsAccepted;
+              });
+            },
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 20 * s,
+                  height: 20 * s,
+                  decoration: BoxDecoration(
+                    color: _isTermsAccepted
+                        ? const Color(0xFFFF2D78)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(5),
+                    border: Border.all(
+                      color: _isTermsAccepted
+                          ? const Color(0xFFFF2D78)
+                          : const Color(0xFFBDBDBD),
+                      width: 1.8,
+                    ),
+                  ),
+                  child: _isTermsAccepted
+                      ? Icon(Icons.check, size: 13 * s, color: Colors.white)
+                      : null,
+                ),
+                SizedBox(width: 10 * s),
+                Expanded(
+                  child: RichText(
+                    text: TextSpan(
+                      style: TextStyle(
+                        fontSize: (11 * s).clamp(10.0, 13.0),
+                        color: const Color(0xFFBBBBBB),
+                        height: 1.5,
+                      ),
+                      children: [
+                        const TextSpan(text: 'I agree to the '),
+                        TextSpan(
+                          text: 'Terms & Conditions',
+                          style: TextStyle(
+                            fontSize: (11 * s).clamp(10.0, 13.0),
+                            color: const Color(0xFFFF2D78),
+                            fontWeight: FontWeight.w600,
+                            decoration: TextDecoration.underline,
+                            decorationColor: const Color(0xFFFF2D78),
+                            height: 1.5,
+                          ),
+                          recognizer: TapGestureRecognizer()
+                            ..onTap = () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const TermsAndConditionsPage(),
+                                ),
+                              );
+                            },
+                        ),
+                        const TextSpan(text: ' and '),
+                        TextSpan(
+                          text: 'Privacy Policy',
+                          style: TextStyle(
+                            fontSize: (11 * s).clamp(10.0, 13.0),
+                            color: const Color(0xFFFF2D78),
+                            fontWeight: FontWeight.w600,
+                            decoration: TextDecoration.underline,
+                            decorationColor: const Color(0xFFFF2D78),
+                            height: 1.5,
+                          ),
+                          recognizer: TapGestureRecognizer()
+                            ..onTap = () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const PrivacyPolicyPage(),
+                                ),
+                              );
+                            },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // ─────────────────────────────────────────────────────────
+          SizedBox(height: 20 * s),
           _GradientButton(
             label: _otpSent ? 'Verify OTP' : 'Send OTP',
             isLoading: _isLoading,
             scale: s,
             onTap: _otpSent ? _onVerifyOtp : _onSendOtp,
-          ),
-          SizedBox(height: 20 * s),
-          Center(
-            child: Text(
-              'By continuing, you agree to our Terms & Privacy Policy',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: (11 * s).clamp(10.0, 13.0),
-                color: const Color(0xFFBBBBBB),
-                height: 1.5,
-              ),
-            ),
           ),
         ],
       ),
