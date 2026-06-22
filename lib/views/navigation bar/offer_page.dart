@@ -8,23 +8,26 @@ class SpecialOffersPage extends StatefulWidget {
   const SpecialOffersPage({super.key, this.onBack});
 
   @override
-  State<SpecialOffersPage> createState() => _SpecialOffersPageState();
+  State<SpecialOffersPage> createState() => SpecialOffersPageState();
 }
 
-class _SpecialOffersPageState extends State<SpecialOffersPage> {
+class SpecialOffersPageState extends State<SpecialOffersPage> {
   bool _loading = true;
   String? _error;
   List<OfferModel> _offers = [];
-  String _selectedCategory = 'All';
-  List<String> _categories = ['All'];
 
   @override
   void initState() {
     super.initState();
+
+    debugPrint("OFFERS PAGE INIT");
+
     _fetchOffers();
   }
 
   Future<void> _fetchOffers() async {
+    debugPrint("FETCH OFFERS STARTED");
+
     setState(() {
       _loading = true;
       _error = null;
@@ -32,44 +35,45 @@ class _SpecialOffersPageState extends State<SpecialOffersPage> {
 
     try {
       final HomeResponseModel data = await UserApiService.getHome();
-      final List<OfferModel> cityOffers = data.offers;
-      final cats = <String>{'All'};
-      for (final o in cityOffers) {
-        if (o.offerType.isNotEmpty) cats.add(_formatCategory(o.offerType));
-      }
+
+      // ✅ MOVE HERE
+      debugPrint("FULL RESPONSE: $data");
+      debugPrint("OFFERS COUNT: ${data.offers.length}");
+
       setState(() {
-        _offers = cityOffers;
-        _categories = cats.toList();
-        if (!_categories.contains(_selectedCategory)) {
-          _selectedCategory = 'All';
-        }
+        _offers = data.offers;
         _loading = false;
       });
     } on ApiException catch (e) {
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      debugPrint('❌ OFFERS API EXCEPTION');
+      debugPrint('Status  : ${e.statusCode}');
+      debugPrint('Message : ${e.message}');
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+      if (e.message == 'SESSION_EXPIRED') {
+        return;
+      }
+
+      if (!mounted) return;
+
       setState(() {
         _loading = false;
         _error = e.message;
       });
-    } catch (e) {
-      setState(() {
-        _loading = false;
-        _error = 'Network error. Check your connection.';
-      });
     }
   }
+
+  Future<void> refreshPage() async {
+    await _fetchOffers();
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────
 
   String _formatCategory(String raw) =>
       raw.isEmpty ? raw : raw[0].toUpperCase() + raw.substring(1);
 
-  List<OfferModel> get _filteredOffers => _selectedCategory == 'All'
-      ? _offers.where((o) => o.isActive).toList()
-      : _offers
-            .where(
-              (o) =>
-                  o.isActive &&
-                  _formatCategory(o.offerType) == _selectedCategory,
-            )
-            .toList();
+  List<OfferModel> get _filteredOffers => _offers;
 
   List<Color> _gradientFor(int index) {
     const palettes = [
@@ -97,35 +101,27 @@ class _SpecialOffersPageState extends State<SpecialOffersPage> {
     return 'Valid till ${DateFormat('d MMM yyyy').format(date)}';
   }
 
-  /// Build the full image URL from banner field
+  // Relative path → full URL; full URL → as-is
   String? _buildBannerUrl(String? banner) {
     if (banner == null || banner.isEmpty) return null;
-
-    // Already a full URL
     if (banner.startsWith('http://') || banner.startsWith('https://')) {
-      debugPrint('🖼️ Banner is already full URL: $banner');
       return banner;
     }
-
-    // Relative path — prepend base URL
     final fullUrl = '${UserApiService.imageBaseUrl}/uploads/$banner';
-    debugPrint('🖼️ Banner relative path: $banner');
-    debugPrint('🌐 Built full URL: $fullUrl');
+    debugPrint('🖼️ Banner: $banner → $fullUrl');
     return fullUrl;
   }
 
+  // ── Offer detail bottom sheet ────────────────────────────────
+
   void _showOfferDetails(BuildContext context, OfferModel offer, int index) {
     debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    debugPrint('📋 [OfferDetails] Offer ID   : ${offer.id}');
-    debugPrint('📋 [OfferDetails] Title      : ${offer.title}');
-    debugPrint('📋 [OfferDetails] Type       : ${offer.offerType}');
-    debugPrint('📋 [OfferDetails] Banner raw : ${offer.banner}');
-    debugPrint(
-      '📋 [OfferDetails] imageBaseUrl: ${UserApiService.imageBaseUrl}',
-    );
+    debugPrint('📋 [OfferDetails] ID    : ${offer.id}');
+    debugPrint('📋 [OfferDetails] Title : ${offer.title}');
+    debugPrint('📋 [OfferDetails] Banner: ${offer.banner}');
 
     final bannerUrl = _buildBannerUrl(offer.banner);
-    debugPrint('📋 [OfferDetails] Final URL  : $bannerUrl');
+    debugPrint('📋 [OfferDetails] URL   : $bannerUrl');
     debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     final gradientColors = _gradientFor(index);
@@ -148,7 +144,7 @@ class _SpecialOffersPageState extends State<SpecialOffersPage> {
             controller: scrollController,
             padding: EdgeInsets.zero,
             children: [
-              // Drag handle
+              // ── Drag handle ─────────────────────────────
               Center(
                 child: Container(
                   margin: const EdgeInsets.only(top: 12, bottom: 8),
@@ -161,7 +157,7 @@ class _SpecialOffersPageState extends State<SpecialOffersPage> {
                 ),
               ),
 
-              // Banner image or fallback
+              // ── Banner image or gradient fallback ───────
               if (bannerUrl != null)
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(
@@ -169,9 +165,9 @@ class _SpecialOffersPageState extends State<SpecialOffersPage> {
                   ),
                   child: Image.network(
                     bannerUrl,
-                    height: 220,
+                    height: 380,
                     width: double.infinity,
-                    fit: BoxFit.cover,
+                    fit: BoxFit.contain,
                     loadingBuilder: (_, child, progress) => progress == null
                         ? child
                         : Container(
@@ -184,8 +180,7 @@ class _SpecialOffersPageState extends State<SpecialOffersPage> {
                             ),
                           ),
                     errorBuilder: (_, error, __) {
-                      debugPrint('❌ [OfferDetails] Image load failed: $error');
-                      debugPrint('   Failed URL: $bannerUrl');
+                      debugPrint('❌ [OfferDetails] Image failed: $error');
                       return _fallbackBanner(gradientColors, offer.offerType);
                     },
                   ),
@@ -193,34 +188,42 @@ class _SpecialOffersPageState extends State<SpecialOffersPage> {
               else
                 _fallbackBanner(gradientColors, offer.offerType),
 
-              // Details
+              // ── Detail content ───────────────────────────
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Category badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 5,
+                    // Store name row
+                    if (offer.storeName != null &&
+                        offer.storeName!.isNotEmpty) ...[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.storefront_rounded,
+                            size: 18,
+                            color: Color(0xFFFF2D78),
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              offer.storeName!,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF4A4A68),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                        ],
                       ),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(colors: gradientColors),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        _formatCategory(offer.offerType),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
+                      const SizedBox(height: 12),
+                    ],
 
-                    // Title
+                    // Offer title
                     Text(
                       offer.title,
                       style: const TextStyle(
@@ -231,7 +234,7 @@ class _SpecialOffersPageState extends State<SpecialOffersPage> {
                     ),
                     const SizedBox(height: 10),
 
-                    // Description
+                    // Description (optional)
                     if (offer.description != null &&
                         offer.description!.isNotEmpty)
                       Text(
@@ -247,7 +250,7 @@ class _SpecialOffersPageState extends State<SpecialOffersPage> {
                     const Divider(),
                     const SizedBox(height: 12),
 
-                    // Expiry
+                    // Expiry date row
                     Row(
                       children: [
                         const Icon(
@@ -275,6 +278,7 @@ class _SpecialOffersPageState extends State<SpecialOffersPage> {
     );
   }
 
+  // Gradient placeholder when banner image is absent or fails
   Widget _fallbackBanner(List<Color> colors, String offerType) {
     return Container(
       height: 160,
@@ -290,6 +294,8 @@ class _SpecialOffersPageState extends State<SpecialOffersPage> {
       ),
     );
   }
+
+  // ── Build ────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -325,20 +331,11 @@ class _SpecialOffersPageState extends State<SpecialOffersPage> {
               child: CustomScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
-                  SliverPersistentHeader(
-                    pinned: true,
-                    delegate: _CategoryFilterDelegate(
-                      categories: _categories,
-                      selected: _selectedCategory,
-                      onSelect: (cat) =>
-                          setState(() => _selectedCategory = cat),
-                    ),
-                  ),
                   if (_filteredOffers.isEmpty)
                     const SliverFillRemaining(
                       child: Center(
                         child: Text(
-                          'No offers in this category',
+                          'No offers available',
                           style: TextStyle(
                             color: Color(0xFF8E8E93),
                             fontSize: 15,
@@ -346,6 +343,7 @@ class _SpecialOffersPageState extends State<SpecialOffersPage> {
                         ),
                       ),
                     ),
+
                   if (_filteredOffers.isNotEmpty)
                     SliverPadding(
                       padding: EdgeInsets.fromLTRB(
@@ -430,114 +428,114 @@ class _SpecialOffersPageState extends State<SpecialOffersPage> {
           borderRadius: BorderRadius.circular(20),
           child: Column(
             children: [
-              // Gradient Header
+              // ── Gradient header ────────────────────────
+
+              // Container(
+              //   padding: const EdgeInsets.all(16),
+              //   decoration: BoxDecoration(
+              //     color: const Color(0xFFFFEEF5),
+              //     borderRadius: BorderRadius.circular(20),
+              //   ),
               Container(
-                constraints: const BoxConstraints(minHeight: 100),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: _gradientFor(index),
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
+                  color: const Color(0xFFFDFBFF), // soft crystal white
+                  borderRadius: BorderRadius.circular(20),
+
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.8),
+                    width: 1.2,
                   ),
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 16,
+
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                    BoxShadow(
+                      color: Colors.white.withOpacity(0.8),
+                      blurRadius: 10,
+                      offset: const Offset(-2, -2),
+                    ),
+                  ],
                 ),
                 child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            _iconFor(offer.offerType),
-                            color: Colors.white,
-                            size: 26,
-                          ),
-                          const SizedBox(height: 6),
                           Text(
-                            offer.title,
+                            offer.storeName ?? 'Store',
                             style: const TextStyle(
-                              color: Colors.white,
+                              fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              fontSize: 16,
+                              color: Color(0xFF1C1C2E),
                             ),
-                            softWrap: true,
-                            overflow: TextOverflow.visible,
+                          ),
+
+                          const SizedBox(height: 6),
+
+                          Text(
+                            offer.description ?? '',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Color(0xFF666666),
+                            ),
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.access_time,
+                                size: 14,
+                                color: Color(0xFFFF2D78),
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  _validTill(offer.expiryDate),
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF888888),
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Flexible(
-                      flex: 0,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 7,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.25),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          _formatCategory(offer.offerType),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
 
-              // White Body
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      offer.description ?? '',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: Color(0xFF1C1C2E),
+                    const SizedBox(width: 12),
+
+                    // RIGHT SIDE IMAGE
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: SizedBox(
+                        width: 110,
+                        height: 110,
+                        child: offer.banner != null
+                            ? Image.network(
+                                _buildBannerUrl(offer.banner)!,
+                                fit: BoxFit.contain,
+                              )
+                            : Container(
+                                color: Colors.grey.shade200,
+                                child: const Icon(
+                                  Icons.store,
+                                  size: 40,
+                                  color: Color(0xFFFF2D78),
+                                ),
+                              ),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.access_time,
-                          size: 14,
-                          color: Color(0xFF8E8E93),
-                        ),
-                        const SizedBox(width: 5),
-                        Flexible(
-                          child: Text(
-                            _validTill(offer.expiryDate),
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: Color(0xFF8E8E93),
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const Spacer(),
-                        const Icon(
-                          Icons.arrow_forward_ios_rounded,
-                          size: 14,
-                          color: Color(0xFFFF2D78),
-                        ),
-                      ],
                     ),
                   ],
                 ),
@@ -548,80 +546,4 @@ class _SpecialOffersPageState extends State<SpecialOffersPage> {
       ),
     );
   }
-}
-
-// ─────────────────────────────────────────────────────────────
-// Category filter header
-// ─────────────────────────────────────────────────────────────
-
-class _CategoryFilterDelegate extends SliverPersistentHeaderDelegate {
-  final List<String> categories;
-  final String selected;
-  final ValueChanged<String> onSelect;
-
-  const _CategoryFilterDelegate({
-    required this.categories,
-    required this.selected,
-    required this.onSelect,
-  });
-
-  @override
-  double get minExtent => 56;
-  @override
-  double get maxExtent => 56;
-
-  @override
-  Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) {
-    return ColoredBox(
-      color: Colors.white,
-      child: SizedBox(
-        height: 56,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          itemCount: categories.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 10),
-          itemBuilder: (_, i) {
-            final cat = categories[i];
-            final isSelected = selected == cat;
-            return GestureDetector(
-              onTap: () => onSelect(cat),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  gradient: isSelected
-                      ? const LinearGradient(
-                          colors: [Color(0xFFF48FB1), Color(0xFFFFF5F8)],
-                        )
-                      : null,
-                  color: isSelected ? null : Colors.transparent,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  cat,
-                  style: TextStyle(
-                    color: isSelected ? Colors.white : const Color(0xFF4A4A68),
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                    fontSize: 14,
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  @override
-  bool shouldRebuild(_CategoryFilterDelegate old) =>
-      old.selected != selected || old.categories != categories;
 }

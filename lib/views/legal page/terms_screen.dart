@@ -207,8 +207,14 @@ class _ContactFooter extends StatelessWidget {
       scheme: 'mailto',
       path: 'Bestagencyindia2026@gmail.com',
     );
-
     await launchUrl(emailUri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _launchDeleteUrl() async {
+    final Uri url = Uri.parse(
+      'https://coinapi.bestagencyindia.com/delete-user.html',
+    );
+    await launchUrl(url, mode: LaunchMode.externalApplication);
   }
 
   @override
@@ -249,17 +255,35 @@ class _ContactFooter extends StatelessWidget {
           const SizedBox(height: 10),
           GestureDetector(
             onTap: _launchEmail,
-            child: Row(
+            child: const Row(
               children: [
-                const Icon(
-                  Icons.mail_outline,
-                  size: 16,
-                  color: Color(0xFFFF2D78),
-                ),
-                const SizedBox(width: 6),
-                const Expanded(
+                Icon(Icons.mail_outline, size: 16, color: Color(0xFFFF2D78)),
+                SizedBox(width: 6),
+                Expanded(
                   child: Text(
                     'Bestagencyindia2026@gmail.com',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      color: Color(0xFFFF2D78),
+                      fontWeight: FontWeight.w500,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: _launchDeleteUrl,
+            child: const Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.delete_outline, size: 16, color: Color(0xFFFF2D78)),
+                SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Delete Account:\ncoinapi.bestagencyindia.com/delete-user.html',
                     style: TextStyle(
                       fontSize: 13.5,
                       color: Color(0xFFFF2D78),
@@ -313,36 +337,42 @@ class TermsAndConditionsPage extends StatelessWidget {
     ),
     LegalSection(
       number: '4',
-      title: 'Rewards Program',
+      title: 'OTP Authentication',
       body:
-          'Badacoin may offer reward points, cashback, promotional benefits, and loyalty rewards. The Company may modify reward rules, change reward values, suspend reward programs, or cancel rewards obtained through fraud. Reward points are not legal tender and have no guaranteed cash value.',
+          'Users must register a valid mobile number and complete OTP verification. Users must not share OTPs, use another person\'s mobile number, or attempt unauthorized access.',
     ),
     LegalSection(
       number: '5',
+      title: 'Rewards Program',
+      body:
+          'Badacoin may offer reward points, cashback, promotional benefits, and loyalty rewards. The Company may modify reward rules, change reward values, suspend reward programs, or cancel rewards obtained through fraud. Reward points are promotional loyalty rewards only and are not cryptocurrency, digital assets, securities, investment products, or legal tender. Reward points have no guaranteed cash value and may be modified or discontinued at any time.',
+    ),
+    LegalSection(
+      number: '6',
       title: 'Wallet Services',
       body:
           'The App may display reward balances, earnings history, redemption history, and withdrawal requests. Displayed balances are subject to verification by the Company.',
     ),
     LegalSection(
-      number: '6',
+      number: '7',
       title: 'Withdrawals',
       body:
-          'Users may request withdrawals subject to minimum withdrawal limits, verification requirements, fraud checks, and operational review. The Company reserves the right to reject, delay, or reverse withdrawal requests where necessary.',
-    ),
-    LegalSection(
-      number: '7',
-      title: 'Location Services',
-      body:
-          'The App may collect location information to show nearby stores, verify user location, improve services, and prevent fraud. Location access may be disabled through device settings, but certain features may not function correctly.',
+          'Users may request withdrawals subject to minimum withdrawal limits, verification requirements, fraud checks, and operational review. Withdrawal requests may take up to 7 business days to process. The Company reserves the right to reject, delay, reverse, or cancel withdrawal requests where necessary.',
     ),
     LegalSection(
       number: '8',
+      title: 'Location Services',
+      body:
+          'The App may collect location information to show nearby stores, verify user location, improve services, and prevent fraud. Location access may be disabled through device settings, but certain features may not function correctly. By enabling location services, users consent to collection and processing of location information for operational purposes.',
+    ),
+    LegalSection(
+      number: '9',
       title: 'Notifications',
       body:
           'The App may send notifications regarding offers, rewards, promotions, wallet activity, security alerts, and system updates. Users may disable notifications through device settings.',
     ),
     LegalSection(
-      number: '9',
+      number: '10',
       title: 'User Responsibilities',
       body: 'Users agree not to:',
       bullets: [
@@ -355,43 +385,55 @@ class TermsAndConditionsPage extends StatelessWidget {
       ],
     ),
     LegalSection(
-      number: '10',
+      number: '11',
       title: 'Fraud Prevention',
       body:
           'The Company may investigate suspicious activities including fake registrations, multiple accounts, reward abuse, and unauthorized transactions. Accounts may be suspended or terminated during investigations.',
     ),
     LegalSection(
-      number: '11',
+      number: '12',
+      title: 'Rewards Abuse Policy',
+      body:
+          'The Company may suspend, restrict, or terminate accounts involved in fake referrals, multiple account creation, reward manipulation, or fraudulent transactions.',
+    ),
+    LegalSection(
+      number: '13',
+      title: 'Account Deletion',
+      body:
+          'Users may request account deletion at any time through https://coinapi.bestagencyindia.com/delete-user.html or by contacting support. Upon deletion, access to the App will be terminated and reward balances may be forfeited. The Company may retain certain information where required for legal obligations, fraud prevention, financial record retention, security investigations, and dispute resolution.',
+    ),
+    LegalSection(
+      number: '14',
       title: 'Intellectual Property',
       body:
           'All App content, trademarks, logos, graphics, databases, software, and related materials remain the property of the Company.',
     ),
     LegalSection(
-      number: '12',
+      number: '15',
       title: 'Account Suspension',
       body:
           'The Company may suspend or terminate accounts for violation of these Terms, fraudulent activity, security concerns, or legal compliance requirements.',
     ),
     LegalSection(
-      number: '13',
+      number: '16',
       title: 'Disclaimer',
       body:
           'The App is provided on an "AS IS" and "AS AVAILABLE" basis. The Company makes no guarantees regarding continuous availability, error-free operation, accuracy of content, or compatibility with all devices.',
     ),
     LegalSection(
-      number: '14',
+      number: '17',
       title: 'Limitation of Liability',
       body:
           'To the fullest extent permitted by law, the Company shall not be liable for indirect, incidental, special, or consequential damages arising from use of the App.',
     ),
     LegalSection(
-      number: '15',
+      number: '18',
       title: 'Changes to Terms',
       body:
           'The Company may update these Terms at any time. Continued use of the App constitutes acceptance of updated Terms.',
     ),
     LegalSection(
-      number: '16',
+      number: '19',
       title: 'Governing Law',
       body:
           'These Terms shall be governed by the laws of India. Any disputes shall be subject to the exclusive jurisdiction of the courts located in Thrissur, Kerala, India.',

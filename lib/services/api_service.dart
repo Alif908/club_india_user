@@ -1,6 +1,9 @@
 import 'dart:convert';
+import 'package:club_india_user/main.dart';
+import 'package:club_india_user/views/login_page.dart';
 import 'package:flutter/foundation.dart';
 import 'package:club_india_user/models/user_model.dart';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -101,17 +104,23 @@ class UserApiService {
     bool requiresAuth = false,
   }) async {
     final uri = Uri.parse('$_baseUrl$endpoint');
-    final headers = <String, String>{'Content-Type': 'application/json'};
+
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
 
     debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     debugPrint('📤 [$method] $endpoint');
     debugPrint('   URI: $uri');
 
+    // ── AUTH TOKEN ─────────────────────────────────────────────
     if (requiresAuth) {
       final token = await _getToken();
 
       if (token == null || token.isEmpty) {
         debugPrint('❌ [Auth] No token found');
+
         throw ApiException(
           statusCode: 401,
           message: 'No token found. Please login again.',
@@ -124,6 +133,7 @@ class UserApiService {
       debugPrint('   Token length: ${token.length}');
     }
 
+    // ── BODY ────────────────────────────────────────────────────
     if (body != null) {
       debugPrint('   Body: ${jsonEncode(body)}');
     } else {
@@ -135,8 +145,6 @@ class UserApiService {
     try {
       switch (method.toUpperCase()) {
         case 'POST':
-          debugPrint('🚀 Executing HTTP POST');
-
           response = await http
               .post(
                 uri,
@@ -147,8 +155,6 @@ class UserApiService {
           break;
 
         case 'PUT':
-          debugPrint('🚀 Executing HTTP PUT');
-
           response = await http
               .put(
                 uri,
@@ -159,8 +165,6 @@ class UserApiService {
           break;
 
         case 'GET':
-          debugPrint('🚀 Executing HTTP GET');
-
           response = await http
               .get(uri, headers: headers)
               .timeout(const Duration(seconds: 15));
@@ -175,39 +179,45 @@ class UserApiService {
 
       throw ApiException(
         statusCode: 0,
-        message: 'Network error. Check your connection.',
+        message: 'Network error. Check your internet connection.',
       );
     }
 
     debugPrint('📥 [$method] $endpoint');
     debugPrint('   Status: ${response.statusCode}');
-    debugPrint('   Response Body: ${response.body}');
+    debugPrint('   Response: ${response.body}');
     debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     dynamic decoded;
-
     try {
       decoded = jsonDecode(response.body);
     } catch (_) {
       decoded = response.body;
     }
 
+    // ─────────────────────────────────────────────
+    // 401 HANDLING (TOKEN EXPIRED)
+    // ─────────────────────────────────────────────
     if (response.statusCode == 401) {
-      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       debugPrint('🔒 TOKEN EXPIRED / UNAUTHORIZED');
-      debugPrint('Status : ${response.statusCode}');
-      debugPrint('URL    : $endpoint');
-      debugPrint('Action : Clear Token');
-      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-      await logout();
+      try {
+        await logout();
 
-      throw ApiException(
-        statusCode: 401,
-        message: 'Session expired. Please login again.',
-      );
+        navigatorKey.currentState?.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const LoginPage()),
+          (route) => false,
+        );
+      } catch (e) {
+        debugPrint('❌ Navigation Error: $e');
+      }
+
+      throw ApiException(statusCode: 401, message: 'SESSION_EXPIRED');
     }
 
+    // ─────────────────────────────────────────────
+    // OTHER ERRORS
+    // ─────────────────────────────────────────────
     if (response.statusCode < 200 || response.statusCode >= 300) {
       String msg = 'Something went wrong';
 
@@ -215,14 +225,12 @@ class UserApiService {
         msg = decoded['message'].toString();
       }
 
-      debugPrint('❌ [API Error]');
-      debugPrint('   Status: ${response.statusCode}');
-      debugPrint('   Message: $msg');
+      debugPrint('❌ API ERROR: $msg');
 
       throw ApiException(statusCode: response.statusCode, message: msg);
     }
 
-    debugPrint('✅ [API Success] $endpoint');
+    debugPrint('✅ API SUCCESS: $endpoint');
 
     return decoded;
   }
@@ -253,9 +261,9 @@ class UserApiService {
     required String otp,
     String? name,
     String? email,
-
     double? latitude,
     double? longitude,
+    bool forceLogin = false, // 🔥 ADD THIS
   }) async {
     debugPrint('✅ [verifyOtp] Verifying OTP for phone: $phone');
 
@@ -266,6 +274,7 @@ class UserApiService {
       if (email != null) 'email': email,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
+      if (forceLogin) 'force_login': true, // 🔥 ADD THIS
     };
 
     debugPrint('   Payload keys: ${bodyPayload.keys.toList()}');
@@ -302,13 +311,43 @@ class UserApiService {
       requiresAuth: true,
     );
 
-    // 🔥 ADD THIS
     debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     debugPrint('📦 RAW HOME RESPONSE');
     debugPrint(data.toString());
     debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-    final result = HomeResponseModel.fromJson(data as Map<String, dynamic>);
+    // 🔥 DEBUG
+    debugPrint('POPUPS => ${(data as Map<String, dynamic>)['popups']}');
+    debugPrint('POPUP => ${data['popup']}');
+    debugPrint('SPECIAL AD => ${data['special_ad']}');
+    debugPrint('ALL KEYS => ${data.keys.toList()}');
+
+    final result = HomeResponseModel.fromJson(data);
+
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    debugPrint('🎁 OFFERS DEBUG');
+    debugPrint('Total Offers : ${result.offers.length}');
+
+    for (final offer in result.offers) {
+      debugPrint('----------------------------');
+      debugPrint('ID          : ${offer.id}');
+      debugPrint('STORE ID    : ${offer.storeId}');
+      debugPrint('STORE NAME  : ${offer.storeName}');
+      debugPrint('TITLE       : ${offer.title}');
+      debugPrint('DESCRIPTION : ${offer.description}');
+      debugPrint('BANNER      : ${offer.banner}');
+      debugPrint('ACTIVE      : ${offer.isActive}');
+      debugPrint('EXPIRY DATE : ${offer.expiryDate}');
+
+      // 🔥 NEW FIELDS
+      debugPrint('ADDON ID    : ${offer.addonId}');
+      debugPrint('DAYS        : ${offer.days}');
+      debugPrint('ADDON PRICE : ${offer.addonPrice}');
+      debugPrint('TOTAL PRICE : ${offer.totalPrice}');
+      debugPrint('START DATE  : ${offer.startDate}');
+    }
+
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     debugPrint('✅ [getHome] Home data loaded');
     debugPrint('   Nearby Stores: ${result.nearbyStores.length}');
@@ -318,6 +357,24 @@ class UserApiService {
     debugPrint('   Popup Ad Active: ${result.popupAd?.active ?? false}');
 
     return result;
+  }
+
+  //---------validation session-------------------
+  static Future<bool> validateSession() async {
+    try {
+      final token = await _getToken();
+
+      if (token == null || token.isEmpty) {
+        return false;
+      }
+
+      await getProfile(); // backend validation
+
+      return true;
+    } catch (e) {
+      debugPrint('❌ Session validation failed: $e');
+      return false;
+    }
   }
 
   // ────────────────────────────────────────────────────────────
@@ -368,7 +425,6 @@ class UserApiService {
       requiresAuth: true,
     );
 
-    // 🔥 FIX: Backend may return { "transactions": [...] } or plain list
     final List<dynamic> list;
     if (data is List) {
       list = data;
@@ -389,9 +445,19 @@ class UserApiService {
     final earned = transactions.where((t) => t.isEarned).length;
     final redeemed = transactions.where((t) => t.isRedeemed).length;
     final withdrawn = transactions.where((t) => t.isWithdrawn).length;
+
     debugPrint(
       '   Earned: $earned  |  Redeemed: $redeemed  |  Withdrawn: $withdrawn',
     );
+
+    for (final t in transactions) {
+      debugPrint(
+        'TYPE=${t.transactionType} '
+        'POINTS=${t.rewardPoints} '
+        'EARNED=${t.isEarned} '
+        'REDEEMED=${t.isRedeemed}',
+      );
+    }
 
     return transactions;
   }
@@ -578,81 +644,7 @@ class UserApiService {
     return cities;
   }
 
-  // ────────────────────────────────────────────────────────────
-  // CITY OFFERS  (offers belonging to stores in user's city)
-  // ────────────────────────────────────────────────────────────
-
-  /// GET /api/user/city-offers
-  ///
-  /// Returns a list of [OfferModel] for stores in the user's city.
-  /// Backend response: plain array  [ {...}, {...} ]
-  static Future<List<OfferModel>> getCityOffers() async {
-    debugPrint('🎁 [getCityOffers] Fetching city offers...');
-
-    final data = await _request(
-      method: 'GET',
-      endpoint: '/user/city-offers',
-      requiresAuth: true,
-    );
-
-    // Backend returns a plain list
-    final List<dynamic> list;
-    if (data is List) {
-      list = data;
-    } else if (data is Map<String, dynamic> && data.containsKey('offers')) {
-      list = data['offers'] as List<dynamic>;
-    } else {
-      list = [];
-      debugPrint('⚠️ [getCityOffers] Unexpected response format');
-    }
-
-    final offers = list
-        .map((o) => OfferModel.fromJson(o as Map<String, dynamic>))
-        .toList();
-
-    debugPrint('✅ [getCityOffers] Loaded: ${offers.length} offers');
-    return offers;
-  }
-
-  // ────────────────────────────────────────────────────────────
-  // CITY POPUPS  (popup ads belonging to stores in user's city)
-  // ────────────────────────────────────────────────────────────
-
-  /// GET /api/user/city-popups
-  ///
-  /// Returns a list of popup ads for the user's city.
-  /// We take the first active popup and show it as the home-page popup ad.
-  /// Backend response: plain array  [ { "active": true, "image": "https://..." }, ... ]
-  static Future<List<PopupAdModel>> getCityPopups() async {
-    debugPrint('📢 [getCityPopups] Fetching city popups...');
-
-    final data = await _request(
-      method: 'GET',
-      endpoint: '/user/city-popups',
-      requiresAuth: true,
-    );
-
-    // Backend returns a plain list
-    final List<dynamic> list;
-    if (data is List) {
-      list = data;
-    } else if (data is Map<String, dynamic> && data.containsKey('popups')) {
-      list = data['popups'] as List<dynamic>;
-    } else {
-      list = [];
-      debugPrint('⚠️ [getCityPopups] Unexpected response format');
-    }
-
-    final popups = list
-        .map((p) => PopupAdModel.fromJson(p as Map<String, dynamic>))
-        .toList();
-
-    debugPrint('✅ [getCityPopups] Loaded: ${popups.length} popups');
-    final active = popups.where((p) => p.shouldShow).length;
-    debugPrint('   Active & showable: $active');
-
-    return popups;
-  }
+  
   //delete account
 
   static Future<void> openDeleteAccountPage() async {
@@ -660,7 +652,7 @@ class UserApiService {
       'https://coinapi.bestagencyindia.com/delete-user.html',
     );
 
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+    if (!await launchUrl(url, mode: LaunchMode.platformDefault)) {
       throw Exception('Could not launch $url');
     }
   }

@@ -1,6 +1,4 @@
-// ============================================================
-// lib/views/navigation bar/redeem_point_screen.dart
-// ============================================================
+
 
 import 'package:club_india_user/services/api_service.dart';
 import 'package:flutter/material.dart';
@@ -34,8 +32,7 @@ class _RedeemPointsPageState extends State<RedeemPointsPage> {
   bool _insufficientBalance = false;
   bool _loadingProfile = true;
 
-  // 🔥 FIX: Track whether user has manually interacted with slider/input
-  // so we don't reset their selection on balance refresh
+  
   bool _userHasInteracted = false;
 
   // ── Controllers ──────────────────────────────────────────────
@@ -80,12 +77,10 @@ class _RedeemPointsPageState extends State<RedeemPointsPage> {
       final user = await UserApiService.getProfile();
       if (!mounted) return;
       setState(() {
-        _currentBalance = user.walletBalance; // fresh balance
+        _currentBalance = user.walletBalance; 
 
-        // 🔥 FIX: Only reset slider if user has NOT interacted yet
         _initSliderRange(preserveSelection: _userHasInteracted);
 
-        // Auto-fill bank details only if fields are still empty
         if (_accountHolderController.text.isEmpty &&
             user.bankHolderName?.isNotEmpty == true) {
           _accountHolderController.text = user.bankHolderName!;
@@ -111,7 +106,6 @@ class _RedeemPointsPageState extends State<RedeemPointsPage> {
     }
   }
 
-  // 🔥 FIX: preserveSelection = true → keep _selectedPoints if still valid
   void _initSliderRange({required bool preserveSelection}) {
     final balanceInt = _currentBalance.toInt();
     if (balanceInt < _minPoints) {
@@ -125,7 +119,6 @@ class _RedeemPointsPageState extends State<RedeemPointsPage> {
       _sliderMax = balanceInt.clamp(_minPoints, 999999).toDouble();
 
       if (preserveSelection) {
-        // Keep existing selection but re-clamp to new valid range
         _selectedPoints = _selectedPoints.clamp(_sliderMin, _sliderMax);
       } else {
         _selectedPoints = 5000.0.clamp(_sliderMin, _sliderMax);
@@ -151,7 +144,7 @@ class _RedeemPointsPageState extends State<RedeemPointsPage> {
 
   // ── Points input handlers ─────────────────────────────────────
   void _onPointsInputChanged(String value) {
-    _userHasInteracted = true; // 🔥 FIX: Mark as interacted
+    _userHasInteracted = true; 
     final parsed = double.tryParse(value);
     if (parsed == null) return;
     setState(() => _selectedPoints = parsed.clamp(_sliderMin, _sliderMax));
@@ -173,7 +166,7 @@ class _RedeemPointsPageState extends State<RedeemPointsPage> {
 
   void _selectPreset(int points) {
     if (_insufficientBalance) return;
-    _userHasInteracted = true; // 🔥 FIX: Mark as interacted
+    _userHasInteracted = true; 
     setState(
       () => _selectedPoints = points.toDouble().clamp(_sliderMin, _sliderMax),
     );
@@ -200,7 +193,6 @@ class _RedeemPointsPageState extends State<RedeemPointsPage> {
     if (_ifscController.text.trim().isEmpty) {
       return 'Please enter the IFSC code.';
     }
-    // 🔥 FIX: IFSC must be exactly 11 characters
     if (_ifscController.text.trim().length != 11) {
       return 'IFSC code must be exactly 11 characters.';
     }
@@ -242,12 +234,25 @@ class _RedeemPointsPageState extends State<RedeemPointsPage> {
 
       setState(() {
         _currentBalance = result.remainingBalance;
-        _userHasInteracted = false; // reset so slider re-initialises cleanly
+        _userHasInteracted = false; 
         _initSliderRange(preserveSelection: false);
         _isRedeeming = false;
       });
 
       widget.onRedeemSuccess?.call(result.remainingBalance);
+
+      if (mounted) {
+        _showSnack(
+          '₹${(_selectedPoints * _conversionRate).toStringAsFixed(2)} '
+          'redemption initiated! Balance: ${_formatBalance(result.remainingBalance)} pts',
+        );
+
+        Future.delayed(const Duration(seconds: 1), () {
+          if (mounted) {
+            Navigator.pop(context); 
+          }
+        });
+      }
 
       if (mounted) {
         _showSnack(
@@ -630,7 +635,7 @@ class _RedeemPointsPageState extends State<RedeemPointsPage> {
                                   ? null
                                   : (value) {
                                       _userHasInteracted =
-                                          true; // 🔥 FIX: Mark interacted
+                                          true; 
                                       setState(
                                         () => _selectedPoints = value
                                             .roundToDouble(),
@@ -786,7 +791,6 @@ class _RedeemPointsPageState extends State<RedeemPointsPage> {
                             ),
                             const SizedBox(height: 16),
 
-                            // Account Number *
                             TextField(
                               controller: _accountNumberController,
                               keyboardType: TextInputType.number,
@@ -806,7 +810,6 @@ class _RedeemPointsPageState extends State<RedeemPointsPage> {
                             ),
                             const SizedBox(height: 16),
 
-                            // 🔥 FIX: IFSC — maxLength 11, uppercase enforced
                             TextField(
                               controller: _ifscController,
                               textCapitalization: TextCapitalization.characters,
@@ -831,7 +834,7 @@ class _RedeemPointsPageState extends State<RedeemPointsPage> {
                               decoration: _bankFieldDecoration(
                                 'IFSC Code',
                                 required: true,
-                              ).copyWith(counterText: ''), // hide char counter
+                              ).copyWith(counterText: ''), 
                             ),
                             const SizedBox(height: 16),
 

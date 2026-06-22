@@ -52,26 +52,24 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller.forward();
 
-    // ✅ Token check cheyth navigate cheyyunnu
     _navigateAfterSplash();
   }
 
   Future<void> _navigateAfterSplash() async {
-    // Splash minimum 3 seconds kaanikkuva + token check parallel aayi nadakkum
     final results = await Future.wait([
       Future.delayed(const Duration(seconds: 3)),
-      UserApiService.isLoggedIn(),
+      UserApiService.validateSession(),
     ]);
 
     if (!mounted) return;
 
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
-    final bool isLoggedIn = results[1] as bool;
-
-    if (isLoggedIn) {
-      // ✅ Token undo — direct home page
-      // phoneNumber empty string kodukkunnu (token already saved aanu)
+    final bool isSessionValid = results[1] as bool;
+    if (isSessionValid) {
+      debugPrint('━━━━━━━━━━━━━━━━━━');
+      debugPrint('🔍 VALIDATING SESSION');
+      debugPrint('━━━━━━━━━━━━━━━━━━');
       Navigator.pushReplacement(
         context,
         PageRouteBuilder(
@@ -88,7 +86,6 @@ class _SplashScreenState extends State<SplashScreen>
         ),
       );
     } else {
-      // ✅ Token illa — login page
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const LoginPage()),

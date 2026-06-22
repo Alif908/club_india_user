@@ -181,7 +181,20 @@ class _LoginCardState extends State<_LoginCard>
     }
   }
 
-  void _onVerifyOtp() async {
+  String normalizePhone(String phone) {
+    phone = phone.trim().replaceAll(' ', '');
+
+    if (phone.startsWith('+91')) {
+      phone = phone.substring(3);
+    }
+
+    return phone;
+  }
+
+  void _onVerifyOtp({bool forceLogin = false}) async {
+    // 🔥 parameter add
+    if (_isLoading) return;
+
     final otp = _otpController.text.trim();
 
     if (otp.length < 6) {
@@ -191,34 +204,27 @@ class _LoginCardState extends State<_LoginCard>
 
     setState(() => _isLoading = true);
 
-    double? latitude;
-    double? longitude;
-
-    final locationResult = await LocationService.getCurrentLocation();
-
-    if (locationResult is LocationSuccess) {
-      latitude = locationResult.latitude;
-      longitude = locationResult.longitude;
-
-      debugPrint('📍 GPS: $latitude, $longitude');
-    }
-
     try {
-      final phone = _phoneController.text.trim();
+      final phone = normalizePhone(_phoneController.text.trim());
 
-      await UserApiService.verifyOtp(
+      double? latitude;
+      double? longitude;
+
+      final locationResult = await LocationService.getCurrentLocation();
+      if (locationResult is LocationSuccess) {
+        latitude = locationResult.latitude;
+        longitude = locationResult.longitude;
+      }
+
+      final res = await UserApiService.verifyOtp(
         phone: phone,
         otp: otp,
         latitude: latitude,
         longitude: longitude,
+        forceLogin: forceLogin, // 🔥 pass ചെയ്യുന്നു
       );
 
-      // 🔥 Get FCM Token
       final fcmToken = await FirebaseMessaging.instance.getToken();
-
-      debugPrint('FCM TOKEN => $fcmToken');
-
-      // 🔥 Save token to backend
       if (fcmToken != null && fcmToken.isNotEmpty) {
         await UserApiService.saveFcmToken(fcmToken);
       }
@@ -232,9 +238,64 @@ class _LoginCardState extends State<_LoginCard>
       );
     } on ApiException catch (e) {
       if (!mounted) return;
+
+      if (e.statusCode == 409) {
+        // 🔥 Already logged in on another device
+        setState(() => _isLoading = false);
+        _showForceLoginDialog();
+      } else {
+        setState(() => _isLoading = false);
+        _showSnack(e.message);
+      }
+    } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
-      _showSnack(e.message);
+      _showSnack('Something went wrong');
     }
+  }
+
+  // 🔥 Dialog — UI change ഇല്ല, existing _showSnack style-ൽ തന്നെ
+  void _showForceLoginDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Already Logged In',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF1C1C2E),
+          ),
+        ),
+        content: const Text(
+          'This account is active on another device. Log out from that device and continue here?',
+          style: TextStyle(color: Color(0xFF8E8E93)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Color(0xFF8E8E93)),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _onVerifyOtp(forceLogin: true); // 🔥 force login
+            },
+            child: const Text(
+              'Continue Here',
+              style: TextStyle(
+                color: Color(0xFFFF2D78),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showSnack(String msg) {

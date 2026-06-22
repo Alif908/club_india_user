@@ -2,19 +2,15 @@ import 'package:club_india_user/models/user_model.dart';
 import 'package:club_india_user/services/api_service.dart';
 import 'package:flutter/material.dart';
 
-// ═══════════════════════════════════════════════════════════════════════════
-// HISTORY PAGE
-// ═══════════════════════════════════════════════════════════════════════════
-
 class HistoryPage extends StatefulWidget {
   final VoidCallback? onBack;
   const HistoryPage({super.key, this.onBack});
 
   @override
-  State<HistoryPage> createState() => _HistoryPageState();
+  State<HistoryPage> createState() => HistoryPageState();
 }
 
-class _HistoryPageState extends State<HistoryPage> {
+class HistoryPageState extends State<HistoryPage> {
   bool _loading = true;
   String? _error;
   List<TransactionModel> _transactions = [];
@@ -37,20 +33,29 @@ class _HistoryPageState extends State<HistoryPage> {
         _loading = false;
       });
     } on ApiException catch (e) {
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      debugPrint('❌ HISTORY API EXCEPTION');
+      debugPrint('Status  : ${e.statusCode}');
+      debugPrint('Message : ${e.message}');
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+      if (e.message == 'SESSION_EXPIRED') {
+        debugPrint('🔒 Session expired handled globally');
+        return;
+      }
+
+      if (!mounted) return;
+
       setState(() {
         _loading = false;
         _error = e.message;
       });
-    } catch (_) {
-      setState(() {
-        _loading = false;
-        _error = 'Network error. Check your connection.';
-      });
     }
   }
 
-  // ── Summary helpers ────────────────────────────────────────
-  // TransactionModel uses double; convert to int for display (matches old UI)
+  Future<void> refreshPage() async {
+    await _fetchHistory();
+  }
 
   int get _totalEarned => _transactions
       .where((t) => t.isEarned)
@@ -58,14 +63,13 @@ class _HistoryPageState extends State<HistoryPage> {
 
   int get _totalRedeemed => _transactions
       .where((t) => t.isRedeemed)
-      .fold(0, (sum, t) => sum + (t.rewardPoints ?? 0).toInt());
+      .fold(0, (sum, t) => sum + (t.redeemedPoints ?? 0).toInt());
 
-  // ── UI helpers ─────────────────────────────────────────────
-
-  /// Map a TransactionModel to the display values the card widgets need.
   _CardData _cardData(TransactionModel t) {
     final isEarned = t.isEarned;
-    final pts = (t.rewardPoints ?? 0).toInt();
+    final pts = t.isEarned
+        ? (t.rewardPoints ?? 0).toInt()
+        : (t.redeemedPoints ?? 0).toInt();
 
     // Title: prefer a store-based label; fall back to type label
     String title;
@@ -248,14 +252,10 @@ class _HistoryPageState extends State<HistoryPage> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Internal display DTO (replaces old TransactionItem — no separate model needed)
-// ─────────────────────────────────────────────────────────────────────────────
-
 class _CardData {
   final String title;
   final String dateTime;
-  final int points; // negative when redeemed
+  final int points;
   final bool isEarned;
 
   const _CardData({
@@ -265,10 +265,6 @@ class _CardData {
     required this.isEarned,
   });
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Summary Card
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _SummaryCard extends StatelessWidget {
   final int earned;

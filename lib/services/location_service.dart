@@ -1,4 +1,5 @@
 import 'dart:developer' as dev;
+import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 
 sealed class LocationResult {}
@@ -106,6 +107,59 @@ class LocationService {
       return LocationFailure(
         'Could not fetch your location. Please check GPS and try again.',
       );
+    }
+  }
+
+  static Future<String> getPlaceName(double lat, double lng) async {
+    try {
+      dev.log(
+        '📍 [LocationService] Reverse geocoding: $lat, $lng',
+        name: 'LocationService',
+      );
+
+      final List<Placemark> placemarks = await placemarkFromCoordinates(
+        lat,
+        lng,
+      );
+
+      if (placemarks.isEmpty) {
+        dev.log('⚠️ [LocationService] Empty placemark result');
+        return "Unknown location";
+      }
+
+      final Placemark place = placemarks.first;
+
+      final String? city = place.locality;
+      final String? district = place.subAdministrativeArea;
+      final String? state = place.administrativeArea;
+
+      dev.log(
+        '📦 [LocationService] Raw placemark: '
+        'city=$city, district=$district, state=$state',
+        name: 'LocationService',
+      );
+
+      final List<String> parts = [
+        if (city != null && city.isNotEmpty) city,
+        if (district != null && district.isNotEmpty) district,
+        if (state != null && state.isNotEmpty) state,
+      ];
+
+      if (parts.isEmpty) {
+        return "Unknown location";
+      }
+
+      final result = parts.join(', ');
+
+      dev.log(
+        '📍 [LocationService] Final location: $result',
+        name: 'LocationService',
+      );
+
+      return result;
+    } catch (e) {
+      dev.log('❌ [LocationService] Reverse geocoding failed: $e');
+      return "Unknown location";
     }
   }
 

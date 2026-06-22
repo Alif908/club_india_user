@@ -7,6 +7,7 @@
 // ────────────────────────────────────────────────────────────
 
 import 'package:club_india_user/services/api_service.dart';
+import 'package:flutter/material.dart';
 
 class UserModel {
   final int id;
@@ -230,10 +231,17 @@ class OfferModel {
   final String title;
   final String? description;
   final String? banner;
-  final String offerType; // "normal" | "popup"
+  final String offerType;
   final DateTime? expiryDate;
   final bool isActive;
   final DateTime? createdAt;
+  final String? storeImage;
+  final String? storeName;
+  final int? addonId;
+  final int? days;
+  final double? addonPrice;
+  final double? totalPrice;
+  final DateTime? startDate;
 
   OfferModel({
     required this.id,
@@ -245,6 +253,13 @@ class OfferModel {
     this.expiryDate,
     required this.isActive,
     this.createdAt,
+    this.storeImage,
+    this.storeName,
+    this.addonId,
+    this.days,
+    this.addonPrice,
+    this.totalPrice,
+    this.startDate,
   });
 
   factory OfferModel.fromJson(Map<String, dynamic> json) {
@@ -254,7 +269,25 @@ class OfferModel {
       title: json['title'],
       description: json['description'],
       banner: json['banner'],
+      storeName: json['store_name'],
+      storeImage: json['store_image'],
+      addonId: json['addon_id'],
+
+      days: json['days'],
+
+      addonPrice: json['addon_price'] != null
+          ? double.tryParse(json['addon_price'].toString())
+          : null,
+
+      totalPrice: json['total_price'] != null
+          ? double.tryParse(json['total_price'].toString())
+          : null,
+
+      startDate: json['start_date'] != null
+          ? DateTime.tryParse(json['start_date'])
+          : null,
       offerType: json['offer_type'] ?? 'normal',
+
       expiryDate: json['expiry_date'] != null
           ? DateTime.tryParse(json['expiry_date'])
           : null,
@@ -283,8 +316,8 @@ class TransactionModel {
   final double? purchaseAmount;
   final double? rewardPoints;
   final double? rewardPercentage;
+  final double? redeemedPoints;
 
-  // 🔥 FIX: Backend may use 'earned' | 'redeemed' | 'withdrawn'
   final String transactionType;
 
   final DateTime? createdAt;
@@ -298,9 +331,16 @@ class TransactionModel {
     this.rewardPercentage,
     required this.transactionType,
     this.createdAt,
+    this.redeemedPoints,
   });
 
   factory TransactionModel.fromJson(Map<String, dynamic> json) {
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    debugPrint('TRANSACTION JSON');
+    debugPrint(json.toString());
+    debugPrint('transaction_type = ${json['transaction_type']}');
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
     return TransactionModel(
       id: json['id'],
       userId: json['user_id'],
@@ -308,13 +348,21 @@ class TransactionModel {
       purchaseAmount: json['purchase_amount'] != null
           ? double.tryParse(json['purchase_amount'].toString())
           : null,
+
       rewardPoints: json['reward_points'] != null
           ? double.tryParse(json['reward_points'].toString())
           : null,
+
+      redeemedPoints: json['redeemed_points'] != null
+          ? double.tryParse(json['redeemed_points'].toString())
+          : null,
+
       rewardPercentage: json['reward_percentage'] != null
           ? double.tryParse(json['reward_percentage'].toString())
           : null,
+
       transactionType: json['transaction_type'] ?? 'earned',
+
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'])
           : null,
@@ -322,9 +370,18 @@ class TransactionModel {
   }
 
   // ── Helpers ───────────────────────────────────────────────
-  bool get isEarned => transactionType == 'earned';
-  bool get isRedeemed => transactionType == 'redeemed';
-  bool get isWithdrawn => transactionType == 'withdrawn';
+  bool get isEarned =>
+      transactionType.toLowerCase() == 'earned' ||
+      transactionType.toLowerCase() == 'purchased';
+
+  bool get isRedeemed =>
+      transactionType.toLowerCase() == 'redeemed' ||
+      transactionType.toLowerCase() == 'redeem';
+
+  bool get isWithdrawn =>
+      transactionType.toLowerCase() == 'withdrawn' ||
+      transactionType.toLowerCase() == 'withdraw';
+
   bool get isDebit => isRedeemed || isWithdrawn;
 
   String get displayPoints =>
@@ -376,15 +433,21 @@ class SpecialAdModel {
 class PopupAdModel {
   final bool active;
   final String? image;
-  final String? actionUrl;
+  final String? title;
+  final String? storeName;
 
-  PopupAdModel({required this.active, this.image, this.actionUrl});
+  PopupAdModel({required this.active, this.image, this.title, this.storeName});
 
   factory PopupAdModel.fromJson(Map<String, dynamic> json) {
     return PopupAdModel(
-      active: json['active'] ?? false,
-      image: json['image'],
-      actionUrl: json['action_url'],
+      active:
+          json['is_active'] == true ||
+          json['is_active'] == 1 ||
+          json['is_active'] == 'true',
+
+      image: json['banner'],
+      title: json['title'],
+      storeName: json['store_name'],
     );
   }
 
@@ -411,30 +474,93 @@ class HomeResponseModel {
   });
 
   factory HomeResponseModel.fromJson(Map<String, dynamic> json) {
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    debugPrint('🔥 FULL HOME JSON');
+    debugPrint(json.toString());
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    // ✅ Handle both cases (with or without "data")
+    final data = json['data'] ?? json;
+
+    debugPrint('👉 USING DATA = $data');
+
+    // ✅ OFFERS DEBUG
+    debugPrint('━━━━━━━━ OFFERS DEBUG ━━━━━━━━');
+    debugPrint('offers raw = ${data['offers']}');
+    debugPrint('offers type = ${data['offers']?.runtimeType}');
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
     return HomeResponseModel(
-      user: UserModel.fromJson(json['user']),
-      nearbyStores: (json['nearby_stores'] as List)
-          .map((s) => PartnerStoreModel.fromJson(s as Map<String, dynamic>))
-          .toList(),
-      offers: (json['offers'] as List)
-          .map((o) => OfferModel.fromJson(o as Map<String, dynamic>))
+      user: UserModel.fromJson(data['user'] ?? {}),
+
+      nearbyStores: (data['nearby_stores'] ?? [])
+          .map<PartnerStoreModel>(
+            (s) => PartnerStoreModel.fromJson(s as Map<String, dynamic>),
+          )
           .toList(),
 
-      specialAd: json['special_ad'] is Map<String, dynamic>
-          ? SpecialAdModel.fromJson(json['special_ad'] as Map<String, dynamic>)
+      // ✅ SAFE OFFERS PARSING
+      offers: (data['offers'] ?? [])
+          .map<OfferModel>(
+            (o) => OfferModel.fromJson(o as Map<String, dynamic>),
+          )
+          .toList(),
+
+      specialAd: data['special_ad'] is Map<String, dynamic>
+          ? SpecialAdModel.fromJson(data['special_ad'])
           : null,
 
-      // 🔥 Backend popups array support
-      popupAd: json['popups'] is List && (json['popups'] as List).isNotEmpty
-          ? PopupAdModel(
-              active:
-                  json['popups'][0]['is_active'] == true ||
-                  json['popups'][0]['is_active'] == 1,
-              image:
-                  '${UserApiService.imageBaseUrl}/uploads/${json['popups'][0]['banner']}',
-              actionUrl: json['popups'][0]['action_url'],
-            )
-          : null,
+      // 🔥 POPUP LOGIC (your original + debug)
+      popupAd: data['popups'] is List && (data['popups'] as List).isNotEmpty
+          ? (() {
+              debugPrint('━━━━━━━━ POPUP DEBUG ━━━━━━━━');
+
+              final popup = data['popups'][0];
+
+              debugPrint('RAW POPUP = $popup');
+              debugPrint('is_active = ${popup['is_active']}');
+              debugPrint('banner    = ${popup['banner']}');
+              debugPrint('actionUrl = ${popup['action_url']}');
+
+              final isActive =
+                  popup['is_active'] == true ||
+                  popup['is_active'] == 1 ||
+                  popup['is_active'] == 'true';
+
+              final banner = popup['banner']?.toString();
+
+              debugPrint('Parsed isActive = $isActive');
+              debugPrint('Parsed banner   = $banner');
+
+              if (!isActive || banner == null || banner.isEmpty) {
+                debugPrint('❌ POPUP REJECTED');
+                return null;
+              }
+
+              final imageUrl = '${UserApiService.imageBaseUrl}/uploads/$banner';
+
+              debugPrint('✅ POPUP ACCEPTED');
+              debugPrint('Image URL = $imageUrl');
+              debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+              // return PopupAdModel(
+              //   active: true,
+              //   image: imageUrl,
+              //   // actionUrl: popup['action_url'],
+              // );
+
+              return PopupAdModel(
+                active: true,
+                image: imageUrl,
+                title: popup['title']?.toString(), // ✅ ADD
+                storeName: popup['store_name']?.toString(), // ✅ ADD
+              );
+            })()
+          : (() {
+              debugPrint('❌ NO POPUPS FOUND');
+              debugPrint('data["popups"] = ${data['popups']}');
+              return null;
+            })(),
     );
   }
 }

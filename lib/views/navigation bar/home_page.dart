@@ -13,21 +13,21 @@ import 'package:club_india_user/views/navigation%20bar/redeem_point_screen.dart'
 import 'package:club_india_user/views/navigation_bar_page.dart';
 import 'package:flutter/material.dart';
 import 'package:club_india_user/services/location_service.dart';
+import 'package:intl/intl.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  State<HomePage> createState() => HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
+class HomePageState extends State<HomePage> with WidgetsBindingObserver {
+  bool _popupAlreadyShown = false;
   bool _loading = true;
   String? _error;
-
   Timer? _locationTimer;
 
-  // ── Parsed data ─────────────────────────────────────────────
   String _userName = '';
   String _phone = '';
   String _city = '';
@@ -37,16 +37,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   List<OfferModel> _offers = [];
   List<PartnerStoreModel> _partners = [];
 
-  // ── Ad data ──────────────────────────────────────────────────
-  SpecialAdModel? _specialAd;
   PopupAdModel? _popupAd;
 
   @override
   void initState() {
     super.initState();
-
     _initializeHome();
-
     _locationTimer = Timer.periodic(const Duration(minutes: 5), (_) async {
       await _updateCurrentLocation();
     });
@@ -57,27 +53,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _loading = true;
       _error = null;
     });
-
     try {
       final locationResult = await LocationService.getCurrentLocation();
-
       if (locationResult is LocationSuccess) {
         await UserApiService.updateLocation(
           latitude: locationResult.latitude,
           longitude: locationResult.longitude,
         );
-
-        debugPrint(
-          '📍 Location Updated: '
-          '${locationResult.latitude}, '
-          '${locationResult.longitude}',
-        );
       }
-
       await _fetchHome();
     } catch (e) {
       debugPrint('Location update failed: $e');
-
       setState(() {
         _loading = false;
         _error = 'Failed to load data';
@@ -85,28 +71,25 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> refreshPage() async {
+    await _fetchHome();
+  }
+
   Future<void> _updateCurrentLocation() async {
     try {
       final locationResult = await LocationService.getCurrentLocation();
-
       if (locationResult is LocationSuccess) {
         await UserApiService.updateLocation(
           latitude: locationResult.latitude,
           longitude: locationResult.longitude,
         );
-
-        debugPrint(
-          '📍 Auto Location Updated: '
-          '${locationResult.latitude}, '
-          '${locationResult.longitude}',
-        );
+        await _fetchHome();
       }
     } catch (e) {
       debugPrint('❌ Auto location update failed: $e');
     }
   }
 
-  // ── Decode base64 QR from backend ───────────────────────────
   Uint8List? _decodeQr(String? raw) {
     if (raw == null || raw.isEmpty) return null;
     try {
@@ -118,74 +101,239 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
+  String? _buildBannerUrl(String? banner) {
+    if (banner == null || banner.isEmpty) return null;
+    if (banner.startsWith('http://') || banner.startsWith('https://')) {
+      return banner;
+    }
+    return '${UserApiService.imageBaseUrl}/uploads/$banner';
+  }
+
+  List<Color> _gradientFor(int index) {
+    const palettes = [
+      [Color(0xFF9B59B6), Color(0xFFFF6EB4)],
+      [Color(0xFFFF8C42), Color(0xFFFF5252)],
+      [Color(0xFF00B4DB), Color(0xFF00CFFF)],
+      [Color(0xFF2ECC71), Color(0xFF1ABC9C)],
+      [Color(0xFF667EEA), Color(0xFF764BA2)],
+    ];
+    return palettes[index % palettes.length];
+  }
+
+  IconData _iconFor(String offerType) {
+    switch (offerType.toLowerCase()) {
+      case 'popup':
+        return Icons.campaign_rounded;
+      case 'normal':
+      default:
+        return Icons.local_offer_rounded;
+    }
+  }
+
+  String _validTill(DateTime? date) {
+    if (date == null) return 'No expiry';
+    return 'Valid till ${DateFormat('d MMM yyyy').format(date)}';
+  }
+
+  void _showOfferDetails(BuildContext context, OfferModel offer, int index) {
+    final bannerUrl = _buildBannerUrl(offer.banner);
+    final gradientColors = _gradientFor(index);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.75,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (_, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: ListView(
+            controller: scrollController,
+            padding: EdgeInsets.zero,
+            children: [
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 12, bottom: 8),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              if (bannerUrl != null)
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(20),
+                  ),
+                  child: Image.network(
+                    bannerUrl,
+                    height: 380,
+                    width: double.infinity,
+                    fit: BoxFit.contain,
+                    loadingBuilder: (_, child, progress) => progress == null
+                        ? child
+                        : Container(
+                            height: 220,
+                            color: Colors.grey.shade100,
+                            child: const Center(
+                              child: CircularProgressIndicator(
+                                color: Color(0xFFFF2D78),
+                              ),
+                            ),
+                          ),
+                    errorBuilder: (_, __, ___) =>
+                        _fallbackBanner(gradientColors, offer.offerType),
+                  ),
+                )
+              else
+                _fallbackBanner(gradientColors, offer.offerType),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.storefront,
+                          size: 18,
+                          color: Color(0xFFFF2D78),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            offer.storeName ?? 'Store',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF4A4A68),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      offer.title,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1C1C2E),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    if (offer.description != null &&
+                        offer.description!.isNotEmpty)
+                      Text(
+                        offer.description!,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          color: Color(0xFF4A4A68),
+                          height: 1.5,
+                        ),
+                      ),
+                    const SizedBox(height: 16),
+                    const Divider(),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.access_time_rounded,
+                          size: 18,
+                          color: Color(0xFFFF2D78),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _validTill(offer.expiryDate),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF8E8E93),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _fallbackBanner(List<Color> colors, String offerType) {
+    return Container(
+      height: 160,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: colors,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Center(
+        child: Icon(_iconFor(offerType), color: Colors.white, size: 60),
+      ),
+    );
+  }
+
   Future<void> _fetchHome() async {
-    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    debugPrint('🏠 HOME API CALL STARTED');
-    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     try {
       final HomeResponseModel data = await UserApiService.getHome();
 
       if (!mounted) return;
-
+      debugPrint('🔥 POPUP storeName = ${data.popupAd?.storeName}');
+      debugPrint('🔥 POPUP title     = ${data.popupAd?.title}');
       setState(() {
         _error = null;
-
-        _userName = data.user.name ?? 'User';
+        _userName = data.user.name ?? '';
         _phone = data.user.phone;
         _city = data.user.city ?? '';
         _walletBalance = data.user.walletBalance;
         _qrBytes = _decodeQr(data.user.qrCode);
-
         _offers = data.offers.take(3).toList();
         _partners = data.nearbyStores.take(5).toList();
 
-        _specialAd = data.specialAd;
-        _popupAd = data.popupAd;
+        if (data.popupAd != null &&
+            data.popupAd!.active == true &&
+            data.popupAd!.shouldShow == true) {
+          _popupAd = data.popupAd;
+        } else {
+          _popupAd = null;
+        }
 
         _loading = false;
       });
 
-      debugPrint('📢 [Ad] Using popup from Home API');
-
-      if (_popupAd != null && _popupAd!.shouldShow && mounted) {
+      if (_popupAd != null &&
+          _popupAd!.active == true &&
+          _popupAd!.shouldShow == true &&
+          !_popupAlreadyShown &&
+          mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            _showPopupAd();
-          }
+          if (!mounted) return;
+          _popupAlreadyShown = true;
+          _showPopupAd();
         });
       }
     } on ApiException catch (e) {
-      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      debugPrint('❌ API EXCEPTION');
-      debugPrint('Status  : ${e.statusCode}');
-      debugPrint('Message : ${e.message}');
-      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-
-      if (e.statusCode == 401) {
-        debugPrint('🔄 Redirecting to LoginPage');
-
-        if (!mounted) return;
-
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const LoginPage()),
-          (route) => false,
-        );
-
-        return;
-      }
-
+      if (e.message == 'SESSION_EXPIRED') return;
       if (!mounted) return;
-
       setState(() {
         _loading = false;
         _error = e.message;
       });
     } catch (e) {
-      debugPrint('❌ [HomePage._fetchHome] $e');
-
       if (!mounted) return;
-
       setState(() {
         _loading = false;
         _error = 'Network error. Check your connection.';
@@ -193,13 +341,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  // ── Popup Ad Dialog ──────────────────────────────────────────
   void _showPopupAd() {
-    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    debugPrint('🎬 [Ad] _showPopupAd() called');
-    debugPrint('📢 Popup Image Raw = ${_popupAd?.image}');
-    debugPrint('   Image URL: ${_popupAd!.image}');
-    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    if (_popupAd == null ||
+        _popupAd!.active != true ||
+        _popupAd!.shouldShow != true)
+      return;
+
     showDialog(
       context: context,
       barrierColor: Colors.black.withOpacity(0.75),
@@ -210,10 +357,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    debugPrint('🗑️ [HomePage] dispose()');
-
     _locationTimer?.cancel();
-
     super.dispose();
   }
 
@@ -243,13 +387,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       const SizedBox(height: 16),
                       _buildPointsCard(),
                       const SizedBox(height: 16),
-
-                      // ── Special Ad Banner ─────────────────
-                      if (_specialAd != null && _specialAd!.shouldShow) ...[
-                        _SpecialAdBanner(ad: _specialAd!),
-                        const SizedBox(height: 16),
-                      ],
-
                       _buildSectionHeader('Special Offers', 'View All', () {
                         Navigator.pushReplacement(
                           context,
@@ -315,7 +452,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
-  // ── Header ──────────────────────────────────────────────────
   Widget _buildHeader() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -385,7 +521,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
-  // ── QR Card ─────────────────────────────────────────────────
   Widget _buildQRCard(BuildContext context) {
     return Container(
       width: double.infinity,
@@ -533,7 +668,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
-  // ── Points / Wallet Card ─────────────────────────────────────
   Widget _buildPointsCard() {
     final formatted = _walletBalance
         .toStringAsFixed(0)
@@ -603,7 +737,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               borderRadius: BorderRadius.circular(16),
             ),
             child: ElevatedButton(
-              // ✅ UPDATED: await push so _fetchHome() runs after back
               onPressed: () async {
                 await Navigator.push(
                   context,
@@ -612,9 +745,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         RedeemPointsPage(walletBalance: _walletBalance),
                   ),
                 );
-                if (mounted) {
-                  _fetchHome();
-                }
+                if (mounted) _fetchHome();
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.transparent,
@@ -643,7 +774,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
-  // ── Section Header ───────────────────────────────────────────
   Widget _buildSectionHeader(String title, String action, VoidCallback onTap) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -674,7 +804,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
-  // ── Offers Row ───────────────────────────────────────────────
   Widget _buildOffersRow() {
     const fallbackColors = [
       Color(0xFFF3D6F5),
@@ -684,7 +813,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     if (_offers.isEmpty) {
       return const SizedBox(
-        height: 155,
+        height: 185,
         child: Center(
           child: Text(
             'No offers available',
@@ -695,49 +824,103 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
 
     return SizedBox(
-      height: 155,
+      height: 185,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: _offers.length,
         separatorBuilder: (_, __) => const SizedBox(width: 12),
         itemBuilder: (_, i) {
           final OfferModel o = _offers[i];
-          return Container(
-            width: 160,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: fallbackColors[i % fallbackColors.length],
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(
-                  Icons.card_giftcard,
-                  color: Color(0xFFFF2D78),
-                  size: 30,
+          final bannerUrl = _buildBannerUrl(o.banner);
+
+          return GestureDetector(
+            onTap: () => _showOfferDetails(context, o, i),
+            child: Container(
+              width: 160,
+              decoration: BoxDecoration(
+                color: fallbackColors[i % fallbackColors.length],
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (bannerUrl != null)
+                      Image.network(
+                        bannerUrl,
+                        width: double.infinity,
+                        height: double.infinity,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (_, child, progress) {
+                          if (progress == null) return child;
+                          return const Center(
+                            child: CircularProgressIndicator(
+                              color: Color(0xFFFF2D78),
+                            ),
+                          );
+                        },
+                        errorBuilder: (_, __, ___) =>
+                            const Center(child: Icon(Icons.image, size: 40)),
+                      )
+                    else
+                      Container(
+                        color: fallbackColors[i % fallbackColors.length],
+                        child: const Center(
+                          child: Icon(
+                            Icons.local_offer_rounded,
+                            color: Color(0xFFFF2D78),
+                            size: 40,
+                          ),
+                        ),
+                      ),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [
+                              Colors.black.withOpacity(0.75),
+                              Colors.transparent,
+                            ],
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              o.title,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              o.storeName ?? 'Store',
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 11,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const Spacer(),
-                Text(
-                  o.title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: Color(0xFF1C1C2E),
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 2,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  o.description ?? '',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF4A4A68),
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+              ),
             ),
           );
         },
@@ -745,7 +928,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
-  // ── Nearby Partners ──────────────────────────────────────────
   Widget _buildNearbyHeader() {
     return const Row(
       children: [
@@ -840,7 +1022,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              p.subscriptionStatus == 'active' ? 'Active' : 'Partner',
+              p.subscriptionStatus == 'active' ? 'Available' : 'Partner',
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w600,
@@ -855,119 +1037,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 }
 
 // ════════════════════════════════════════════════════════════
-// SPECIAL AD BANNER WIDGET
-// ════════════════════════════════════════════════════════════
-
-class _SpecialAdBanner extends StatelessWidget {
-  final SpecialAdModel ad;
-
-  const _SpecialAdBanner({required this.ad});
-
-  @override
-  Widget build(BuildContext context) {
-    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    debugPrint('🖼️ [SpecialAdBanner] build() called');
-    debugPrint('   active    : ${ad.active}');
-    debugPrint('   shouldShow: ${ad.shouldShow}');
-    debugPrint('   image     : ${ad.image ?? "NULL"}');
-    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    return Container(
-      width: double.infinity,
-      height: 140,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFFF2D78).withOpacity(0.18),
-            blurRadius: 20,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Image.network(
-              ad.image!,
-              fit: BoxFit.cover,
-              loadingBuilder: (_, child, progress) {
-                if (progress == null) {
-                  debugPrint('✅ [SpecialAdBanner] Image loaded successfully');
-                  return child;
-                }
-                return Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0xFFFFD6E7), Color(0xFFFFF0F5)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                  ),
-                  child: const Center(
-                    child: CircularProgressIndicator(
-                      color: Color(0xFFFF2D78),
-                      strokeWidth: 2.5,
-                    ),
-                  ),
-                );
-              },
-              errorBuilder: (_, error, ___) {
-                debugPrint('❌ [SpecialAdBanner] Image load FAILED: $error');
-                debugPrint('   URL: ${ad.image}');
-                return Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0xFFFFD6E7), Color(0xFFFFF0F5)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                  ),
-                  child: const Center(
-                    child: Icon(
-                      Icons.image_not_supported_outlined,
-                      color: Color(0xFFFF2D78),
-                      size: 36,
-                    ),
-                  ),
-                );
-              },
-            ),
-            Positioned(
-              top: 10,
-              right: 10,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.45),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Text(
-                  'AD',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ════════════════════════════════════════════════════════════
-// POPUP AD DIALOG WIDGET
+// POPUP AD DIALOG WIDGET  🔥 image + title
 // ════════════════════════════════════════════════════════════
 
 class _PopupAdDialog extends StatefulWidget {
   final PopupAdModel ad;
-
   const _PopupAdDialog({required this.ad});
 
   @override
@@ -982,17 +1056,11 @@ class _PopupAdDialogState extends State<_PopupAdDialog>
 
   Timer? _autoCloseTimer;
   Timer? _countdownTimer;
-  int _countdown = 3;
+  int _countdown = 5;
 
   @override
   void initState() {
     super.initState();
-    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    debugPrint('🎬 [PopupAdDialog] initState() — dialog opened');
-    debugPrint('   Image URL : ${widget.ad.image}');
-    debugPrint('   Auto-close: 3 seconds');
-    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 320),
@@ -1004,22 +1072,19 @@ class _PopupAdDialogState extends State<_PopupAdDialog>
     _fadeAnim = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
     _controller.forward();
 
-    _autoCloseTimer = Timer(const Duration(seconds: 3), _close);
-
+    _autoCloseTimer = Timer(const Duration(seconds: 5), _close);
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) {
         t.cancel();
         return;
       }
       setState(() => _countdown--);
-      debugPrint('⏳ [PopupAdDialog] Countdown: $_countdown');
       if (_countdown <= 0) t.cancel();
     });
   }
 
   @override
   void dispose() {
-    debugPrint('🗑️ [PopupAdDialog] dispose() — dialog closed');
     _controller.dispose();
     _autoCloseTimer?.cancel();
     _countdownTimer?.cancel();
@@ -1027,19 +1092,15 @@ class _PopupAdDialogState extends State<_PopupAdDialog>
   }
 
   void _close() {
-    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    debugPrint('❌ [PopupAdDialog] _close() called');
-    debugPrint('   Remaining countdown: $_countdown');
-    debugPrint(
-      '   Closed by: ${_countdown > 0 ? "User tap" : "Auto-close (3s)"}',
-    );
-    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     if (mounted) Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
     final screenW = MediaQuery.of(context).size.width;
+    final hasTitle =
+        (widget.ad.title != null && widget.ad.title!.isNotEmpty) ||
+        (widget.ad.storeName != null && widget.ad.storeName!.isNotEmpty);
 
     return FadeTransition(
       opacity: _fadeAnim,
@@ -1048,137 +1109,148 @@ class _PopupAdDialogState extends State<_PopupAdDialog>
         child: Dialog(
           backgroundColor: Colors.transparent,
           insetPadding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Container(
-            width: screenW,
-            decoration: BoxDecoration(
-              color: Colors.black,
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFFFF2D78).withOpacity(0.25),
-                  blurRadius: 40,
-                  spreadRadius: 4,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    height: 320,
-                    width: double.infinity,
-                    child: Image.network(
-                      widget.ad.image!,
-                      fit: BoxFit.cover,
-                      loadingBuilder: (_, child, progress) {
-                        if (progress == null) {
-                          debugPrint(
-                            '✅ [PopupAdDialog] Image loaded successfully',
-                          );
-                          return child;
-                        }
-                        return Container(
-                          color: const Color(0xFF1C1C2E),
-                          child: const Center(
-                            child: CircularProgressIndicator(
-                              color: Color(0xFFFF2D78),
-                              strokeWidth: 2.5,
-                            ),
-                          ),
-                        );
-                      },
-                      errorBuilder: (_, error, ___) {
-                        debugPrint(
-                          '❌ [PopupAdDialog] Image load FAILED: $error',
-                        );
-                        debugPrint('   URL: ${widget.ad.image}');
-                        return Container(
-                          color: const Color(0xFF1C1C2E),
-                          child: const Center(
-                            child: Icon(
-                              Icons.image_not_supported_outlined,
-                              color: Color(0xFF4A4A68),
-                              size: 48,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  Container(
-                    color: Colors.black,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 16,
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color: const Color(0xFFFF2D78),
-                              width: 1,
-                            ),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Text(
-                            'Advertisement',
-                            style: TextStyle(
-                              color: Color(0xFFFF2D78),
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.3,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // ── Card: image + optional title ─────────────────
+              ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: Container(
+                  width: screenW,
+                  // 🔥 white background only when title exists
+                  color: Colors.transparent,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // ✅ IMAGE
+                      ClipRRect(
+                        borderRadius: BorderRadius.vertical(
+                          top: const Radius.circular(24),
+                          bottom: hasTitle
+                              ? Radius.zero
+                              : const Radius.circular(24),
+                        ),
+                        child: Image.network(
+                          widget.ad.image!,
+                          width: double.infinity,
+                          fit: BoxFit.contain,
+                          loadingBuilder: (_, child, progress) {
+                            if (progress == null) return child;
+                            return Container(
+                              height: 300,
+                              color: Colors.black54,
+                              child: const Center(
+                                child: CircularProgressIndicator(
+                                  color: Color(0xFFFF2D78),
+                                  strokeWidth: 2.5,
+                                ),
+                              ),
+                            );
+                          },
+                          errorBuilder: (_, __, ___) => Container(
+                            height: 300,
+                            color: Colors.black54,
+                            child: const Center(
+                              child: Icon(
+                                Icons.image_not_supported_outlined,
+                                color: Color(0xFF4A4A68),
+                                size: 48,
+                              ),
                             ),
                           ),
                         ),
-                        const Spacer(),
-                        GestureDetector(
-                          onTap: _close,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFF2D78),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.close_rounded,
-                                  color: Colors.white,
-                                  size: 15,
-                                ),
-                                const SizedBox(width: 5),
-                                Text(
-                                  _countdown > 0
-                                      ? 'Close ($_countdown)'
-                                      : 'Close',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
+                      ),
+
+                      // ✅ TITLE + STORE NAME SECTION
+                      if (hasTitle)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 16,
+                          ),
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.vertical(
+                              bottom: Radius.circular(24),
                             ),
                           ),
+                          child: Column(
+                            children: [
+                              // ✅ STORE NAME (TOP SMALL TEXT)
+                              if (widget.ad.storeName != null &&
+                                  widget.ad.storeName!.isNotEmpty)
+                                Text(
+                                  widget.ad.storeName!,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.grey,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+
+                              const SizedBox(height: 4),
+
+                              // ✅ TITLE (BIG TEXT)
+                              if (widget.ad.title != null &&
+                                  widget.ad.title!.isNotEmpty)
+                                Text(
+                                  widget.ad.title!,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF1C1C2E),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // ── Top-right close button ───────────────────────
+              Positioned(
+                top: -12,
+                right: -12,
+                child: GestureDetector(
+                  onTap: _close,
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFF2D78),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 6,
+                          offset: Offset(0, 2),
                         ),
                       ],
                     ),
+                    child: Center(
+                      child: _countdown > 0
+                          ? Text(
+                              '$_countdown',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            )
+                          : const Icon(
+                              Icons.close_rounded,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                    ),
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ),

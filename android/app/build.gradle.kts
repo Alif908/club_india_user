@@ -8,7 +8,7 @@ plugins {
 
     // Firebase Google Services
     id("com.google.gms.google-services")
-}
+}   
 
 android {
     namespace = "com.example.club_india_user"

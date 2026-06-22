@@ -4,6 +4,7 @@
 
 import 'package:club_india_user/models/user_model.dart';
 import 'package:club_india_user/services/api_service.dart';
+import 'package:club_india_user/services/location_service.dart';
 import 'package:club_india_user/views/legal%20page/addition_legal_screen.dart';
 import 'package:club_india_user/views/legal%20page/policy_screen.dart';
 import 'package:club_india_user/views/legal%20page/terms_screen.dart';
@@ -16,64 +17,133 @@ class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key, this.onBack});
 
   @override
-  State<ProfilePage> createState() => _ProfilePageState();
+  State<ProfilePage> createState() => ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage> {
+class ProfilePageState extends State<ProfilePage> {
   bool _loading = true;
   String? _error;
   UserModel? _user;
+
+  String _placeName = "—";
+  int _totalEarned = 0;
+  int _totalRedeemed = 0;
+  bool _statsLoaded = false;
 
   @override
   void initState() {
     super.initState();
     _fetchProfile();
+    _fetchStats();
   }
 
   Future<void> _fetchProfile() async {
     debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     debugPrint('👤 [ProfilePage] _fetchProfile() called');
+
     setState(() {
       _loading = true;
       _error = null;
     });
+
     try {
       final user = await UserApiService.getProfile();
 
-      debugPrint('📍 [ProfilePage] Location fields from API:');
+      debugPrint('📦 [ProfilePage] RAW USER DATA:');
       debugPrint('   city     : "${user.city}"');
       debugPrint('   district : "${user.district}"');
       debugPrint('   state    : "${user.state}"');
       debugPrint('   latitude : ${user.latitude}');
       debugPrint('   longitude: ${user.longitude}');
 
-      debugPrint('🏦 [ProfilePage] Bank fields from API:');
+      String placeName = "—";
+
+      if (user.latitude != null && user.longitude != null) {
+        try {
+          placeName = await LocationService.getPlaceName(
+            user.latitude!,
+            user.longitude!,
+          );
+
+          debugPrint('📍 [ProfilePage] Reverse Geocoded Location: $placeName');
+        } catch (e) {
+          debugPrint('❌ reverse geocoding failed: $e');
+        }
+      }
+
+      debugPrint('🏦 [ProfilePage] Bank fields:');
       debugPrint('   bankHolderName: "${user.bankHolderName}"');
       debugPrint('   bankName      : "${user.bankName}"');
       debugPrint('   accountNumber : "${user.accountNumber}"');
       debugPrint('   ifscCode      : "${user.ifscCode}"');
       debugPrint('   upiId         : "${user.upiId}"');
-      debugPrint('   hasBankDetails: ${user.hasBankDetails}');
-      debugPrint('   hasUpi        : ${user.hasUpi}');
       debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+      if (!mounted) return;
 
       setState(() {
         _user = user;
+        _placeName = placeName;
+        // _placeName = [
+        //   user.city,
+        //   user.district,
+        // ].where((e) => e != null && e.trim().isNotEmpty).join(', ');
+
+        if (_placeName.isEmpty) {
+          _placeName = '—';
+        }
+        debugPrint("CITY = ${user.city}");
+        debugPrint("DISTRICT = ${user.district}");
         _loading = false;
       });
     } on ApiException catch (e) {
-      debugPrint('❌ [ProfilePage] ApiException: ${e.message}');
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      debugPrint('❌ PROFILE API EXCEPTION');
+      debugPrint('Status  : ${e.statusCode}');
+      debugPrint('Message : ${e.message}');
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+      if (e.message == 'SESSION_EXPIRED') return;
+
+      if (!mounted) return;
       setState(() {
         _loading = false;
         _error = e.message;
       });
-    } catch (e) {
-      debugPrint('❌ [ProfilePage] Unknown error: $e');
-      setState(() {
-        _loading = false;
-        _error = 'Network error. Check your connection.';
-      });
     }
+  }
+
+  Future<void> _fetchStats() async {
+    try {
+      final transactions = await UserApiService.getHistory();
+
+      final earned = transactions
+          .where((t) => t.isEarned)
+          .fold(0, (sum, t) => sum + (t.rewardPoints ?? 0).toInt());
+
+      final redeemed = transactions
+          .where((t) => t.isRedeemed)
+          .fold(0, (sum, t) => sum + (t.redeemedPoints ?? 0).toInt());
+
+      debugPrint('📊 [ProfilePage] Stats from history:');
+      debugPrint('   totalEarned  : $earned');
+      debugPrint('   totalRedeemed: $redeemed');
+
+      if (!mounted) return;
+      setState(() {
+        _totalEarned = earned;
+        _totalRedeemed = redeemed;
+        _statsLoaded = true;
+      });
+    } catch (e) {
+      debugPrint('⚠️ [ProfilePage] _fetchStats failed: $e');
+      if (!mounted) return;
+      setState(() => _statsLoaded = false);
+    }
+  }
+
+  Future<void> refreshPage() async {
+    await Future.wait([_fetchProfile(), _fetchStats()]);
   }
 
   @override
@@ -106,7 +176,7 @@ class _ProfilePageState extends State<ProfilePage> {
           ? _buildError()
           : RefreshIndicator(
               color: const Color(0xFFFF2D78),
-              onRefresh: _fetchProfile,
+              onRefresh: refreshPage,
               child: CustomScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
@@ -116,13 +186,27 @@ class _ProfilePageState extends State<ProfilePage> {
                         horizontal: 16,
                         vertical: 8,
                       ),
-                      child: _ProfileInfoCard(user: _user!),
+                      child: _ProfileInfoCard(
+                        user: _user!,
+                        displayLocation: _placeName,
+                      ),
                     ),
                   ),
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                      child: _PointsSummaryCard(user: _user!),
+                      child: _PointsSummaryCard(
+                        user: _user!,
+                        // _statsLoaded true → history-computed values
+                        // false → UserModel API fallback
+                        totalEarned: _statsLoaded
+                            ? _totalEarned
+                            : _user!.totalEarned.toInt(),
+                        totalRedeemed: _statsLoaded
+                            ? _totalRedeemed
+                            : _user!.totalRedeemed.toInt(),
+                        statsLoading: !_statsLoaded,
+                      ),
                     ),
                   ),
                   if (_user!.hasBankDetails || _user!.hasUpi)
@@ -209,7 +293,13 @@ class _ProfilePageState extends State<ProfilePage> {
 
 class _ProfileInfoCard extends StatelessWidget {
   final UserModel user;
-  const _ProfileInfoCard({required this.user});
+  final String displayLocation;
+
+  const _ProfileInfoCard({
+    super.key,
+    required this.user,
+    required this.displayLocation,
+  });
 
   String _memberSince() {
     if (user.createdAt == null) return 'Club India Member';
@@ -235,13 +325,8 @@ class _ProfileInfoCard extends StatelessWidget {
       (user.name?.isNotEmpty == true) ? user.name! : user.phone;
 
   String get _location {
-    final parts = <String>[
-      if (user.city?.isNotEmpty == true) user.city!,
-      if (user.district?.isNotEmpty == true) user.district!,
-      if (user.state?.isNotEmpty == true) user.state!,
-    ];
-    final result = parts.isNotEmpty ? parts.join(', ') : '—';
-    debugPrint('📍 [_ProfileInfoCard] Computed location: "$result"');
+    final result = displayLocation.isNotEmpty ? displayLocation : '—';
+    debugPrint('📍 [_ProfileInfoCard] Final UI location: "$result"');
     return result;
   }
 
@@ -344,11 +429,26 @@ class _ProfileInfoCard extends StatelessWidget {
 
 class _PointsSummaryCard extends StatelessWidget {
   final UserModel user;
-  const _PointsSummaryCard({required this.user});
+  final int totalEarned;
+  final int totalRedeemed;
+  final bool statsLoading;
 
-  String _fmt(double v) => v
-      .toStringAsFixed(0)
-      .replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},');
+  const _PointsSummaryCard({
+    required this.user,
+    required this.totalEarned,
+    required this.totalRedeemed,
+    required this.statsLoading,
+  });
+
+  String _fmt(int v) => v.toString().replaceAllMapped(
+    RegExp(r'(\d)(?=(\d{3})+$)'),
+    (m) => '${m[1]},',
+  );
+
+  String _fmtDouble(double v) => v.toInt().toString().replaceAllMapped(
+    RegExp(r'(\d)(?=(\d{3})+$)'),
+    (m) => '${m[1]},',
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -371,30 +471,35 @@ class _PointsSummaryCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
-          Row(
+
+          // ── Vertically stacked stat rows ──────────────────────────────
+          Column(
             children: [
-              Expanded(
-                child: _StatBox(
-                  label: 'Wallet Balance',
-                  value: _fmt(user.walletBalance),
-                  color: const Color(0xFFFF2D78),
-                ),
+              _StatBox(
+                label: 'Wallet Balance',
+                // walletBalance: UserModel API value (always reliable)
+                value: _fmtDouble(user.walletBalance),
+                color: const Color(0xFFFF2D78),
+                icon: Icons.account_balance_wallet_outlined,
+                loading: false,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _StatBox(
-                  label: 'Total Earned',
-                  value: _fmt(user.totalEarned),
-                  color: const Color(0xFF00B96B),
-                ),
+              const SizedBox(height: 10),
+              _StatBox(
+                label: 'Total Earned',
+                // history-computed sum; placeholder while loading
+                value: _fmt(totalEarned),
+                color: const Color(0xFF00B96B),
+                icon: Icons.trending_up_rounded,
+                loading: statsLoading,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _StatBox(
-                  label: 'Total Redeemed',
-                  value: _fmt(user.totalRedeemed),
-                  color: const Color(0xFFFF2D78),
-                ),
+              const SizedBox(height: 10),
+              _StatBox(
+                label: 'Total Redeemed',
+                // history-computed sum; placeholder while loading
+                value: _fmt(totalRedeemed),
+                color: const Color(0xFFFF2D78),
+                icon: Icons.redeem_rounded,
+                loading: statsLoading,
               ),
             ],
           ),
@@ -404,48 +509,78 @@ class _PointsSummaryCard extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+// Stat Box — full-width horizontal card
+// ─────────────────────────────────────────────────────────────
+
 class _StatBox extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
+  final IconData icon;
+  final bool loading;
 
   const _StatBox({
     required this.label,
     required this.value,
     required this.color,
+    required this.icon,
+    required this.loading,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 10.5, color: Color(0xFF999999)),
+          // Leading colored icon badge
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 20),
           ),
-          const SizedBox(height: 4),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
+          const SizedBox(width: 14),
+
+          // Label
+          Expanded(
             child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: color,
-                letterSpacing: -0.5,
+              label,
+              style: const TextStyle(
+                fontSize: 13,
+                color: Color(0xFF999999),
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
+
+          // Value — grey box placeholder while history is loading
+          loading
+              ? Container(
+                  width: 48,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0F0F0),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                )
+              : Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                    letterSpacing: -0.5,
+                  ),
+                ),
         ],
       ),
     );
@@ -589,7 +724,7 @@ class _InfoRow extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Settings Menu  ← UPDATED: Legal tiles added
+// Settings Menu
 // ─────────────────────────────────────────────────────────────
 
 class _SettingsMenu extends StatelessWidget {
@@ -625,7 +760,6 @@ class _SettingsMenu extends StatelessWidget {
                 onTap: () {},
               ),
               _Divider(),
-
               _Divider(),
               _SettingsTile(
                 icon: Icons.help_outline_rounded,
@@ -716,7 +850,7 @@ class _SettingsMenu extends StatelessWidget {
         const SizedBox(height: 14),
 
         // ── Delete account ─────────────────────────────────
-        _DeleteAccountButton(),
+        const _DeleteAccountButton(),
 
         const SizedBox(height: 50),
       ],
