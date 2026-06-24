@@ -4,6 +4,7 @@ import 'package:club_india_user/views/login_page.dart';
 import 'package:flutter/foundation.dart';
 import 'package:club_india_user/models/user_model.dart';
 import 'package:flutter/material.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -577,16 +578,27 @@ class UserApiService {
     required double latitude,
     required double longitude,
   }) async {
-    debugPrint('📍 [updateLocation] Updating location...');
+    final placemarks = await placemarkFromCoordinates(latitude, longitude);
+
+    final place = placemarks.first;
+
+    final city = place.subLocality?.isNotEmpty == true
+        ? place.subLocality!
+        : (place.locality ?? '');
+
+    final district = place.subAdministrativeArea ?? '';
 
     await _request(
       method: 'PUT',
       endpoint: '/user/update-location',
       requiresAuth: true,
-      body: {'latitude': latitude, 'longitude': longitude},
+      body: {
+        'latitude': latitude,
+        'longitude': longitude,
+        'city': city,
+        'district': district,
+      },
     );
-
-    debugPrint('✅ [updateLocation] Location updated');
   }
 
   /// GET /api/public/districts/:state
@@ -644,7 +656,6 @@ class UserApiService {
     return cities;
   }
 
-  
   //delete account
 
   static Future<void> openDeleteAccountPage() async {

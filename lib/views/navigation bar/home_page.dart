@@ -43,7 +43,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     _initializeHome();
-    _locationTimer = Timer.periodic(const Duration(minutes: 5), (_) async {
+    _locationTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
       await _updateCurrentLocation();
     });
   }
@@ -1038,6 +1038,15 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
 // ════════════════════════════════════════════════════════════
 // POPUP AD DIALOG WIDGET  🔥 image + title
+//
+// TIMING LOGIC (as requested):
+//   Phase 1 (0-5s)  -> countdown number shown, NO close icon, not closable
+//   Phase 2 (5-10s) -> close icon shown, user can tap to close,
+//                      otherwise auto-closes when this phase ends
+//
+// TAP LOGIC:
+//   Tapping the ad body (image/title) opens a detail bottom sheet,
+//   same style as the "Special Offers" detail sheet.
 // ════════════════════════════════════════════════════════════
 
 class _PopupAdDialog extends StatefulWidget {
@@ -1050,13 +1059,18 @@ class _PopupAdDialog extends StatefulWidget {
 
 class _PopupAdDialogState extends State<_PopupAdDialog>
     with SingleTickerProviderStateMixin {
+  static const int _countdownSeconds = 5; // Phase 1 duration
+  static const int _closableSeconds = 5; // Phase 2 duration
+
   late AnimationController _controller;
   late Animation<double> _scaleAnim;
   late Animation<double> _fadeAnim;
 
-  Timer? _autoCloseTimer;
-  Timer? _countdownTimer;
-  int _countdown = 5;
+  Timer? _phaseTimer;
+  Timer? _tickTimer;
+
+  bool _isClosable = false; // false = countdown phase, true = close-icon phase
+  int _secondsLeft = _countdownSeconds;
 
   @override
   void initState() {
@@ -1072,22 +1086,49 @@ class _PopupAdDialogState extends State<_PopupAdDialog>
     _fadeAnim = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
     _controller.forward();
 
-    _autoCloseTimer = Timer(const Duration(seconds: 5), _close);
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+    _startCountdownPhase();
+  }
+
+  void _startCountdownPhase() {
+    _isClosable = false;
+    _secondsLeft = _countdownSeconds;
+
+    _tickTimer?.cancel();
+    _tickTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) {
         t.cancel();
         return;
       }
-      setState(() => _countdown--);
-      if (_countdown <= 0) t.cancel();
+      setState(() {
+        _secondsLeft--;
+        if (_secondsLeft <= 0) _secondsLeft = 0;
+      });
     });
+
+    _phaseTimer?.cancel();
+    _phaseTimer = Timer(Duration(seconds: _countdownSeconds), () {
+      if (!mounted) return;
+      _startClosablePhase();
+    });
+  }
+
+  void _startClosablePhase() {
+    _tickTimer?.cancel();
+    setState(() {
+      _isClosable = true;
+      _secondsLeft = _closableSeconds;
+    });
+
+    // After the second duration ends, auto-close if user hasn't closed it.
+    _phaseTimer?.cancel();
+    _phaseTimer = Timer(Duration(seconds: _closableSeconds), _close);
   }
 
   @override
   void dispose() {
     _controller.dispose();
-    _autoCloseTimer?.cancel();
-    _countdownTimer?.cancel();
+    _phaseTimer?.cancel();
+    _tickTimer?.cancel();
     super.dispose();
   }
 
@@ -1095,9 +1136,127 @@ class _PopupAdDialogState extends State<_PopupAdDialog>
     if (mounted) Navigator.of(context).pop();
   }
 
+  void _openAdDetails() {
+    final ad = widget.ad;
+    final imageUrl = ad.image;
+    final hasTitle =
+        (ad.title != null && ad.title!.isNotEmpty) ||
+        (ad.storeName != null && ad.storeName!.isNotEmpty);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.75,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (_, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: ListView(
+            controller: scrollController,
+            padding: EdgeInsets.zero,
+            children: [
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 12, bottom: 8),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              if (imageUrl != null && imageUrl.isNotEmpty)
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(20),
+                  ),
+                  child: Image.network(
+                    imageUrl,
+                    height: 380,
+                    width: double.infinity,
+                    fit: BoxFit.contain,
+                    loadingBuilder: (_, child, progress) => progress == null
+                        ? child
+                        : Container(
+                            height: 220,
+                            color: Colors.grey.shade100,
+                            child: const Center(
+                              child: CircularProgressIndicator(
+                                color: Color(0xFFFF2D78),
+                              ),
+                            ),
+                          ),
+                    errorBuilder: (_, __, ___) => Container(
+                      height: 160,
+                      color: Colors.grey.shade100,
+                      child: const Center(
+                        child: Icon(
+                          Icons.campaign_rounded,
+                          color: Color(0xFFFF2D78),
+                          size: 60,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              if (hasTitle)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (ad.storeName != null && ad.storeName!.isNotEmpty)
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.storefront,
+                              size: 18,
+                              color: Color(0xFFFF2D78),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                ad.storeName!,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF4A4A68),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      const SizedBox(height: 12),
+                      if (ad.title != null && ad.title!.isNotEmpty)
+                        Text(
+                          ad.title!,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1C1C2E),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenW = MediaQuery.of(context).size.width;
+    final screenH = MediaQuery.of(context).size.height;
     final hasTitle =
         (widget.ad.title != null && widget.ad.title!.isNotEmpty) ||
         (widget.ad.storeName != null && widget.ad.storeName!.isNotEmpty);
@@ -1108,149 +1267,172 @@ class _PopupAdDialogState extends State<_PopupAdDialog>
         scale: _scaleAnim,
         child: Dialog(
           backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              // ── Card: image + optional title ─────────────────
-              ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: Container(
-                  width: screenW,
-                  // 🔥 white background only when title exists
-                  color: Colors.transparent,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // ✅ IMAGE
-                      ClipRRect(
-                        borderRadius: BorderRadius.vertical(
-                          top: const Radius.circular(24),
-                          bottom: hasTitle
-                              ? Radius.zero
-                              : const Radius.circular(24),
-                        ),
-                        child: Image.network(
-                          widget.ad.image!,
-                          width: double.infinity,
-                          fit: BoxFit.contain,
-                          loadingBuilder: (_, child, progress) {
-                            if (progress == null) return child;
-                            return Container(
-                              height: 300,
-                              color: Colors.black54,
-                              child: const Center(
-                                child: CircularProgressIndicator(
-                                  color: Color(0xFFFF2D78),
-                                  strokeWidth: 2.5,
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 40,
+          ),
+          child: ConstrainedBox(
+            // limit max height so it never overflows the screen
+            constraints: BoxConstraints(
+              maxHeight: screenH * 0.8,
+              maxWidth: screenW,
+            ),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                // ── Card: image + optional title (TAPPABLE -> opens details) ──
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _openAdDetails,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: Container(
+                      width: screenW,
+                      color: Colors.transparent,
+                      child: SingleChildScrollView(
+                        // scroll instead of overflow if content is tall
+                        physics: const ClampingScrollPhysics(),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // ✅ IMAGE
+                            ClipRRect(
+                              borderRadius: BorderRadius.vertical(
+                                top: const Radius.circular(24),
+                                bottom: hasTitle
+                                    ? Radius.zero
+                                    : const Radius.circular(24),
+                              ),
+                              child: ConstrainedBox(
+                                // cap image height relative to screen
+                                constraints: BoxConstraints(
+                                  maxHeight: screenH * 0.6,
+                                ),
+                                child: Image.network(
+                                  widget.ad.image!,
+                                  width: double.infinity,
+                                  fit: BoxFit.contain,
+                                  loadingBuilder: (_, child, progress) {
+                                    if (progress == null) return child;
+                                    return Container(
+                                      height: 300,
+                                      color: Colors.black54,
+                                      child: const Center(
+                                        child: CircularProgressIndicator(
+                                          color: Color(0xFFFF2D78),
+                                          strokeWidth: 2.5,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  errorBuilder: (_, __, ___) => Container(
+                                    height: 300,
+                                    color: Colors.black54,
+                                    child: const Center(
+                                      child: Icon(
+                                        Icons.image_not_supported_outlined,
+                                        color: Color(0xFF4A4A68),
+                                        size: 48,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
-                            );
-                          },
-                          errorBuilder: (_, __, ___) => Container(
-                            height: 300,
-                            color: Colors.black54,
-                            child: const Center(
-                              child: Icon(
-                                Icons.image_not_supported_outlined,
-                                color: Color(0xFF4A4A68),
-                                size: 48,
-                              ),
                             ),
-                          ),
+
+                            // ✅ TITLE + STORE NAME SECTION
+                            if (hasTitle)
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 16,
+                                ),
+                                decoration: const BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.vertical(
+                                    bottom: Radius.circular(24),
+                                  ),
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (widget.ad.storeName != null &&
+                                        widget.ad.storeName!.isNotEmpty)
+                                      Text(
+                                        widget.ad.storeName!,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.grey,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    const SizedBox(height: 4),
+                                    if (widget.ad.title != null &&
+                                        widget.ad.title!.isNotEmpty)
+                                      Text(
+                                        widget.ad.title!,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF1C1C2E),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                          ],
                         ),
                       ),
-
-                      // ✅ TITLE + STORE NAME SECTION
-                      if (hasTitle)
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 16,
-                          ),
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.vertical(
-                              bottom: Radius.circular(24),
-                            ),
-                          ),
-                          child: Column(
-                            children: [
-                              // ✅ STORE NAME (TOP SMALL TEXT)
-                              if (widget.ad.storeName != null &&
-                                  widget.ad.storeName!.isNotEmpty)
-                                Text(
-                                  widget.ad.storeName!,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.grey,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-
-                              const SizedBox(height: 4),
-
-                              // ✅ TITLE (BIG TEXT)
-                              if (widget.ad.title != null &&
-                                  widget.ad.title!.isNotEmpty)
-                                Text(
-                                  widget.ad.title!,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF1C1C2E),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
 
-              // ── Top-right close button ───────────────────────
-              Positioned(
-                top: -12,
-                right: -12,
-                child: GestureDetector(
-                  onTap: _close,
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFFF2D78),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black26,
-                          blurRadius: 6,
-                          offset: Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Center(
-                      child: _countdown > 0
-                          ? Text(
-                              '$_countdown',
-                              style: const TextStyle(
+                // ── Top-right badge: countdown number OR close icon ──────
+                Positioned(
+                  top: -12,
+                  right: -12,
+                  child: GestureDetector(
+                    // Only closable during phase 2
+                    onTap: _isClosable ? _close : null,
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFF2D78),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black26,
+                            blurRadius: 6,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: !_isClosable
+                            // Phase 1: countdown number only, no close icon
+                            ? Text(
+                                '$_secondsLeft',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              )
+                            // Phase 2: close icon, tappable
+                            : const Icon(
+                                Icons.close_rounded,
                                 color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
+                                size: 18,
                               ),
-                            )
-                          : const Icon(
-                              Icons.close_rounded,
-                              color: Colors.white,
-                              size: 18,
-                            ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

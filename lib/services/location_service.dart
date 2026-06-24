@@ -112,53 +112,46 @@ class LocationService {
 
   static Future<String> getPlaceName(double lat, double lng) async {
     try {
-      dev.log(
-        '📍 [LocationService] Reverse geocoding: $lat, $lng',
-        name: 'LocationService',
-      );
-
-      final List<Placemark> placemarks = await placemarkFromCoordinates(
-        lat,
-        lng,
-      );
+      final placemarks = await placemarkFromCoordinates(lat, lng);
 
       if (placemarks.isEmpty) {
-        dev.log('⚠️ [LocationService] Empty placemark result');
         return "Unknown location";
       }
 
-      final Placemark place = placemarks.first;
+      final place = placemarks.first;
 
-      final String? city = place.locality;
-      final String? district = place.subAdministrativeArea;
-      final String? state = place.administrativeArea;
-
+      dev.log('name = ${place.name}', name: 'LocationService');
+      dev.log('street = ${place.street}', name: 'LocationService');
+      dev.log('subLocality = ${place.subLocality}', name: 'LocationService');
+      dev.log('locality = ${place.locality}', name: 'LocationService');
       dev.log(
-        '📦 [LocationService] Raw placemark: '
-        'city=$city, district=$district, state=$state',
+        'subAdministrativeArea = ${place.subAdministrativeArea}',
+        name: 'LocationService',
+      );
+      dev.log(
+        'administrativeArea = ${place.administrativeArea}',
         name: 'LocationService',
       );
 
-      final List<String> parts = [
-        if (city != null && city.isNotEmpty) city,
-        if (district != null && district.isNotEmpty) district,
-        if (state != null && state.isNotEmpty) state,
-      ];
-
-      if (parts.isEmpty) {
-        return "Unknown location";
-      }
-
-      final result = parts.join(', ');
+      final location = (place.subLocality?.trim().isNotEmpty ?? false)
+          ? place.subLocality!
+          : (place.locality?.trim().isNotEmpty ?? false)
+          ? place.locality!
+          : (place.subAdministrativeArea?.trim().isNotEmpty ?? false)
+          ? place.subAdministrativeArea!
+          : "Unknown location";
 
       dev.log(
-        '📍 [LocationService] Final location: $result',
+        '📍 [LocationService] Final location: $location',
         name: 'LocationService',
       );
 
-      return result;
+      return location;
     } catch (e) {
-      dev.log('❌ [LocationService] Reverse geocoding failed: $e');
+      dev.log(
+        '❌ [LocationService] Reverse geocoding failed: $e',
+        name: 'LocationService',
+      );
       return "Unknown location";
     }
   }

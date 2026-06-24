@@ -111,13 +111,12 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       message.notification?.apple?.imageUrl ??
       message.data['image'];
 
-  // await _showLocalNotification(
-  //   id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-  //   title: notification.title,
-  //   body: notification.body,
-  //   imageUrl: imageUrl,
-  // );
-  
+  await _showLocalNotification(
+    id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    title: notification.title,
+    body: notification.body,
+    imageUrl: imageUrl,
+  );
 }
 
 // ─────────────────────────────────────────────
@@ -147,33 +146,33 @@ Future<void> setupFirebaseMessaging() async {
   debugPrint('🔥 [FCM] Token => $token');
 
   // ── Foreground ────────────────────────────────────────────
-  // FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-  //   final notification = message.notification;
-  //   if (notification == null) return;
+  FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
+    final notification = message.notification;
+    if (notification == null) return;
 
-  //   debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  //   debugPrint('📩 [FCM] Foreground message');
-  //   debugPrint('   Title : ${notification.title}');
-  //   debugPrint('   Body  : ${notification.body}');
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    debugPrint('📩 [FCM] Foreground message');
+    debugPrint('   Title : ${notification.title}');
+    debugPrint('   Body  : ${notification.body}');
 
-  //   final imageUrl =
-  //       message.notification?.android?.imageUrl ??
-  //       message.notification?.apple?.imageUrl ??
-  //       message.data['image'];
-  //   debugPrint('   Image : ${imageUrl ?? "none"}');
-  //   debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    final imageUrl =
+        message.notification?.android?.imageUrl ??
+        message.notification?.apple?.imageUrl ??
+        message.data['image'];
+    debugPrint('   Image : ${imageUrl ?? "none"}');
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-  //   await _showLocalNotification(
-  //     id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-  //     title: notification.title,
-  //     body: notification.body,
-  //     imageUrl: imageUrl,
-  //   );
-  // });
-
-  FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-    debugPrint("📩 Foreground message received (no manual notification)");
+    await _showLocalNotification(
+      id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      title: notification.title,
+      body: notification.body,
+      imageUrl: imageUrl,
+    );
   });
+
+  // FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+  //   debugPrint("📩 Foreground message received (no manual notification)");
+  // });
 
   // ── App opened from background notification ───────────────
   FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {

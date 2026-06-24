@@ -25,7 +25,8 @@ class ProfilePageState extends State<ProfilePage> {
   String? _error;
   UserModel? _user;
 
-  String _placeName = "—";
+  String _placeName = "-";
+
   int _totalEarned = 0;
   int _totalRedeemed = 0;
   bool _statsLoaded = false;
@@ -56,20 +57,27 @@ class ProfilePageState extends State<ProfilePage> {
       debugPrint('   latitude : ${user.latitude}');
       debugPrint('   longitude: ${user.longitude}');
 
-      String placeName = "—";
+      // String placeName = "—";
 
-      if (user.latitude != null && user.longitude != null) {
-        try {
-          placeName = await LocationService.getPlaceName(
-            user.latitude!,
-            user.longitude!,
-          );
+      // if (user.latitude != null && user.longitude != null) {
+      //   try {
+      //     placeName = await LocationService.getPlaceName(
+      //       user.latitude!,
+      //       user.longitude!,
+      //     );
 
-          debugPrint('📍 [ProfilePage] Reverse Geocoded Location: $placeName');
-        } catch (e) {
-          debugPrint('❌ reverse geocoding failed: $e');
-        }
-      }
+      //     debugPrint('📍 [ProfilePage] Reverse Geocoded Location: $placeName');
+      //   } catch (e) {
+      //     debugPrint('❌ reverse geocoding failed: $e');
+      //   }
+      // }
+
+      String placeName = [
+        user.city,
+        user.district,
+      ].where((e) => e != null && e.trim().isNotEmpty).join(', ');
+
+      debugPrint('📍 [ProfilePage] DB Location: $placeName');
 
       debugPrint('🏦 [ProfilePage] Bank fields:');
       debugPrint('   bankHolderName: "${user.bankHolderName}"');
@@ -84,16 +92,15 @@ class ProfilePageState extends State<ProfilePage> {
       setState(() {
         _user = user;
         _placeName = placeName;
-        // _placeName = [
-        //   user.city,
-        //   user.district,
-        // ].where((e) => e != null && e.trim().isNotEmpty).join(', ');
 
         if (_placeName.isEmpty) {
           _placeName = '—';
         }
+
         debugPrint("CITY = ${user.city}");
         debugPrint("DISTRICT = ${user.district}");
+        debugPrint('PROFILE LOCATION = $_placeName');
+
         _loading = false;
       });
     } on ApiException catch (e) {
